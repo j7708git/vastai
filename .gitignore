@@ -1,0 +1,5 @@
+# Generated AWS Vast credentials
+vast-comfyui-s3-credentials.env
+
+# Local GitHub SSH keys used by Codex
+ssh_keys/

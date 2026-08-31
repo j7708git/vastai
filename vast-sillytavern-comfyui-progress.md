@@ -1,0 +1,405 @@
+# Vast.ai Serverless ComfyUI + SillyTavern 專案進度
+
+## 1. 最終目標
+
+讓 SillyTavern 可以透過 Vast.ai Serverless 上的 ComfyUI 呼叫一個自訂的 Krea 2
+文生圖工作流，並使用使用者自己的主模型。目前先專注在單一 Krea 2 文生圖工作流，
+後續再完成 SillyTavern 的橋接與實際接線。
+
+這個專案目前採用以下架構：
+
+```text
+SillyTavern / QIG
+        |
+        | HTTP
+        v
+本機 bridge / proxy（OpenAI-compatible API）
+        |
+        | vastai SDK
+        v
+Vast Serverless
+        |
+        | /route/ + worker 選擇 + 簽名
+        v
+PyWorker
+        |
+        | /generate/sync
+        v
+ComfyUI API Wrapper -> ComfyUI -> S3
+        |
+        v
+回傳圖片 presigned URL
+```
+
+重要限制：Vast Serverless 不會直接公開 ComfyUI 原本的 `POST /prompt`、
+`/history` 和 WebSocket `/ws` 作為外部 API。官方的 ComfyUI Serverless 模板對外
+提供的是 PyWorker 的 `/generate/sync`，因此需要在 SillyTavern 與 Vast 之間加一層
+bridge。
+
+## 2. 已完成項目
+
+| 項目 | 狀態 | 說明 |
+| --- | --- | --- |
+| AWS S3 bucket | 已完成 | `vast-comfyui-730116069170-ap-southeast-2-an` |
+| S3 加密 | 已完成 | 使用 AWS 預設的 SSE-S3 bucket 加密 |
+| S3 限制存取 | 已完成 | Block Public Access 已啟用 |
+| S3 versioning | 已完成 | 已啟用 |
+| AWS 權限 | 已完成 | 只能對專用 bucket 的物件執行 `GetObject` 和 `PutObject` |
+| AWS 存取憑證 | 已完成 | 已存放在本機 Git-ignored 檔案 |
+| 模型上傳 | 已完成 | UNet、text encoder、VAE 均已上傳 |
+| Krea 2 workflow JSON | 已完成 | `vast-krea2-t2i.json` 已準備 |
+| provisioning script | 已完成初版 | `provisioning.sh` 已寫入，尚未在 Vast 實測 |
+| Vast 測試 client | 已完成初版 | `vast_krea2_client.py` 已準備 |
+| Vast endpoint | 未完成 | 尚未建立或確認 |
+| Vast provisioning public URL | 未完成 | 尚未 hosting raw script |
+| SillyTavern bridge | 未完成 | 目前尚未實作 |
+| SillyTavern 接線 | 未完成 | 尚未設定 |
+
+## 3. AWS / S3 目前設定
+
+### 3.1 非機密設定
+
+```text
+AWS selected Region = ap-southeast-2
+S3_BUCKET_NAME     = vast-comfyui-730116069170-ap-southeast-2-an
+S3_ENDPOINT_URL    = https://s3.ap-southeast-2.amazonaws.com
+S3_REGION          = ap-southeast-2
+```
+
+### 3.2 存取憑證
+
+目前使用本機的 Vast 專用憑證檔案：
+
+```text
+vast-comfyui-s3-credentials.env
+```
+
+這個檔案已加入 `.gitignore`，不會提交到 Git。文件內不應、也不會包含
+`S3_ACCESS_KEY_ID` 或 `S3_SECRET_ACCESS_KEY` 的內容。
+
+### 3.3 AWS 權限
+
+目前的權限策略只允許：
+
+```text
+s3:GetObject
+s3:PutObject
+```
+
+限制範圍：
+
+```text
+arn:aws:s3:::vast-comfyui-730116069170-ap-southeast-2-an/*
+```
+
+此外要求使用 HTTPS。此策略不包含 `ListBucket`、`DeleteObject` 或其他管理權限。
+權限策略檔案為：
+
+```text
+vast-comfyui-s3-policy.json
+```
+
+## 4. S3 已上傳的模型
+
+| 用途 | S3 Object Key | 大小 |
+| --- | --- | --- |
+| UNet / 主模型 | `models/diffusion_models/lustifyNSFWCheckpoint_v10Krea2.safetensors` | 約 13.1 GB |
+| 另一支 Krea 2 UNet | `models/diffusion_models/moodyKrea2Mix_v70.safetensors` | 約 14.1 GB |
+| Flux 2.9B UNet | `models/diffusion_models/Flux2_9b/snofsSexNudesAndOtherFunStuff_v14Distilled.safetensors` | 約 9.1 GB |
+| Text encoder | `models/text_encoders/qwen3vl_4b_fp8_scaled.safetensors` | 約 5.2 GB |
+| VAE | `models/vae/qwen_image_vae.safetensors` | 約 254 MB |
+
+目前 `provisioning.sh` 預設下載：
+
+```text
+lustifyNSFWCheckpoint_v10Krea2.safetensors
+qwen3vl_4b_fp8_scaled.safetensors
+qwen_image_vae.safetensors
+```
+
+如果之後想改用另一支 Krea 2 主模型，可以透過 Vast template 的 environment
+variables 切換，不需要改 workflow，只需要改下載路徑和檔案名稱。
+
+## 5. Provisioning Script
+
+### 5.1 檔案
+
+```text
+provisioning.sh
+```
+
+### 5.2 用途
+
+在 Vast worker 第一次啟動時：
+
+1. 確認 `boto3` 可用，必要時安裝。
+2. 從 S3 下載 UNet 到：
+
+   ```text
+   /workspace/ComfyUI/models/diffusion_models/
+   ```
+
+3. 從 S3 下載 text encoder 到：
+
+   ```text
+   /workspace/ComfyUI/models/text_encoders/
+   ```
+
+4. 從 S3 下載 VAE 到：
+
+   ```text
+   /workspace/ComfyUI/models/vae/
+   ```
+
+5. Clone 這個 workflow 使用的 custom node：
+
+   ```text
+   https://github.com/liuqianhonga/ComfyUI-Image-Compressor.git
+   ```
+
+6. 安裝該 custom node 的 `requirements.txt`。
+
+### 5.3 需要的環境變數
+
+```text
+S3_BUCKET_NAME
+S3_ACCESS_KEY_ID
+S3_SECRET_ACCESS_KEY
+S3_ENDPOINT_URL
+S3_REGION
+```
+
+這些值可以放在 Vast Account Settings 的 Environment Variables 中，Vast worker
+啟動時會取得。公開的 `provisioning.sh` 內不含任何 AWS 憑證。
+
+可選 override：
+
+```text
+MODEL_S3_KEY
+MODEL_FILENAME
+CLIP_S3_KEY
+CLIP_FILENAME
+VAE_S3_KEY
+VAE_FILENAME
+IMAGE_COMPRESSOR_REPO
+```
+
+### 5.4 目前進度
+
+- [x] `bash -n provisioning.sh` 語法檢查通過。
+- [x] 內嵌的 Python 下載邏輯語法檢查通過。
+- [ ] hosting 到 public GitHub / Gist raw URL。
+- [ ] 在 Vast template 設定 `PROVISIONING_SCRIPT`。
+- [ ] 在 Vast worker 實際執行一次。
+
+## 6. Krea 2 文生圖工作流
+
+### 6.1 檔案
+
+```text
+vast-krea2-t2i.json
+```
+
+這是 ComfyUI API-format workflow，可以直接放入 Vast 的 `workflow_json`。
+
+目前的預設設定：
+
+```text
+width         = 768
+height        = 768
+batch_size    = 1
+steps         = 8
+cfg           = 1
+sampler_name  = euler
+scheduler     = simple
+denoise       = 1
+uNet          = lustifyNSFWCheckpoint_v10Krea2.safetensors
+clip          = qwen3vl_4b_fp8_scaled.safetensors
+vae           = qwen_image_vae.safetensors
+```
+
+### 6.2 佔位符
+
+```text
+%prompt%          文字 prompt，由 client / bridge 替換
+__RANDOM_INT__    seed，由 Vast 或 client / bridge 替換
+```
+
+目前的 client 已支援：
+
+```text
+--prompt
+--width
+--height
+--steps
+--seed
+```
+
+### 6.3 注意事項
+
+工作流目前使用 `ImageCompressor` 作為輸出節點。provisioning script 會嘗試安裝
+對應 custom node；在 Vast 上第一次正式測試時，需要確認：
+
+1. custom node 是否成功載入。
+2. workflow 是否通過 Vast 的 validation。
+3. 回傳的 `output` 是否包含可下載的 S3 presigned URL。
+
+如果正式測試發現沒有輸出，可以先用一般 ComfyUI `SaveImage` 節點診斷，確認
+ComfyUI 本身可以產生圖片，再決定是否保留 `ImageCompressor`。
+
+## 7. Vast 測試 Client
+
+### 7.1 檔案
+
+```text
+vast_krea2_client.py
+```
+
+### 7.2 使用方式
+
+先安裝 Vast SDK：
+
+```powershell
+pip install vastai
+```
+
+設定 Vast API key：
+
+```powershell
+$env:VAST_API_KEY = "your-vast-api-key"
+```
+
+執行：
+
+```powershell
+python vast_krea2_client.py `
+  --endpoint my-comfyui-endpoint `
+  --prompt "a cinematic portrait, dramatic lighting, detailed"
+```
+
+可選參數：
+
+```powershell
+--width 1024
+--height 1024
+--steps 12
+--seed 12345
+```
+
+client 會：
+
+1. 讀取 `vast-krea2-t2i.json`。
+2. 把 `%prompt%` 替換成使用者輸入的 prompt。
+3. 如果提供 seed，把 `__RANDOM_INT__` 替換成指定 seed。
+4. 透過 Vast SDK 取得 endpoint。
+5. 呼叫 `/generate/sync`。
+6. 印出 JSON response。
+
+## 8. SillyTavern 接線方案
+
+### 8.1 為什麼需要 bridge
+
+SillyTavern 的 ComfyUI source 通常適用於一般的 ComfyUI HTTP API，而 Vast
+Serverless 不是 standard ComfyUI server。Vast 的路由、worker 選擇、簽名和
+`/generate/sync` payload 由 `vastai` SDK 處理，因此 SillyTavern 不能直接指向
+Vast worker 的標準 ComfyUI endpoint。
+
+### 8.2 建議的 bridge
+
+在 SillyTavern 所在電腦上跑一個小型 HTTP service，例如 FastAPI 或 Flask：
+
+```text
+POST /v1/images/generations
+```
+
+Bridge 的責任：
+
+1. 接收 SillyTavern 送來的 prompt。
+2. 載入 Krea 2 workflow。
+3. 替換 prompt、尺寸、steps、seed。
+4. 使用 `vastai` SDK 呼叫 Vast `/generate/sync`。
+5. 解析 response 中的 S3 presigned URL。
+6. 回傳 OpenAI-compatible responses：
+
+```json
+{
+  "data": [
+    {
+      "url": "https://.../generated_image.png"
+    }
+  ]
+}
+```
+
+只有 bridge 需要安裝 `vastai`。SillyTavern 本身不需要安裝，也不需要在
+SillyTavern 中直接使用 Vast SDK。
+
+### 8.3 安全與執行建議
+
+- bridge 預設只綁定 `127.0.0.1`。
+- 不要公開 Vast API key。
+- 不要公開 AWS S3 的 secret key。
+- 如果必須遠端存取，只建議透過本機反向代理並加上鑑權。
+- 如果 SillyTavern 與 Vast 不在同一台機器，bridge 可以放在另一台小主機上，
+  但該主機仍需要 `vastai` 與 Vast API key。
+
+## 9. 下一步
+
+### 9.1 部署前置
+
+- [ ] 把 `provisioning.sh` 上傳到 public GitHub repository 或 public Gist。
+- [ ] 取得 raw URL，格式例如：
+
+  ```text
+  https://raw.githubusercontent.com/<user>/<repo>/main/provisioning.sh
+  ```
+
+- [ ] 在 Vast Account Settings 確認 `S3_*` 環境變數。
+- [ ] 在 Vast template 設定 `PROVISIONING_SCRIPT`。
+- [ ] 建立 Serverless endpoint / workergroup。
+- [ ] 確認 GPU VRAM 和 endpoint 名稱。
+- [ ] 等待 worker 完成 provisioning、benchmark 和 ready 狀態。
+
+### 9.2 驗證 Krea 2 workflow
+
+- [ ] 使用 `vast_krea2_client.py` 送一筆 request。
+- [ ] 確認 response 的 `status` 是 `completed`。
+- [ ] 確認 response 的 `output` 包含 S3 URL。
+- [ ] 打開圖片確認模型、VAE、prompt 都正確。
+- [ ] 確認冷啟動、第一次下載模型和 benchmark 時間是否可接受。
+
+### 9.3 完成 SillyTavern 接線
+
+- [ ] 確認 SillyTavern 使用的 image generation extension 或 QIG 的 API 格式。
+- [ ] 確認 QIG 是否使用 `%prompt%` 或其他 placeholder。
+- [ ] 實作本地 bridge API。
+- [ ] 在 bridge 中設定 Vast endpoint name。
+- [ ] 用 curl 或其他 client 測試 bridge。
+- [ ] 在 SillyTavern 設定 custom API / reverse proxy 指到 bridge。
+- [ ] 從 SillyTavern 送出一張圖，確認圖片 URL 可下載。
+
+## 10. 已知尚未確認事項
+
+1. 尚未建立或確認 Vast Serverless endpoint 名稱。
+2. 尚未取得 Vast API key。
+3. `provisioning.sh` 尚未 hosting 到 public raw URL。
+4. Krea 2 workflow 尚未在 Vast worker 上實際成功執行。
+5. `ImageCompressor` custom node 與 Vast 基礎 image 的相容性尚未驗證。
+6. SillyTavern / QIG 的實際 API 格式尚未確認。
+7. 是否使用 `lustifyNSFWCheckpoint_v10Krea2.safetensors` 或
+   `moodyKrea2Mix_v70.safetensors` 尚未做最終選擇。
+8. 目前沒有實作 bridge。
+
+## 11. 目前檔案清單
+
+| 檔案 | 用途 | 狀態 |
+| --- | --- | --- |
+| `vast-sillytavern-comfyui-progress.md` | 本專案進度文件 | 新增 |
+| `provisioning.sh` | 下載模型與 custom node | 初版完成 |
+| `vast-krea2-t2i.json` | Krea 2 API-format workflow | 初版完成 |
+| `vast_krea2_client.py` | 本機 Vast 測試 client | 初版完成 |
+| `vast-provisioning.md` | Provisioning 設定摘要 | 完成 |
+| `vast-s3-setup.md` | S3 非機密設定摘要 | 完成 |
+| `vast-comfyui-s3-policy.json` | S3 物件權限策略 | 完成 |
+| `vast-comfyui-s3-credentials.env` | AWS 憑證，本機限定 | 已完成，不提交 |
+| `.gitignore` | 忽略憑證檔案 | 完成 |
