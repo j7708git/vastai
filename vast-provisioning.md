@@ -11,13 +11,13 @@ models/vae/qwen_image_vae.safetensors
 These three objects are confirmed present in the bucket. The provisioning
 script will fail early if any one is missing.
 
-## Host the script
+## Hosted script
 
-Vast fetches `PROVISIONING_SCRIPT` over HTTP. Put this file in a public Gist
-or a public GitHub repository and use the raw URL, for example:
+Vast fetches `PROVISIONING_SCRIPT` over HTTP. This repository is public and the
+raw URL is:
 
 ```text
-https://raw.githubusercontent.com/<user>/<repo>/main/provisioning.sh
+https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
 ```
 
 ## Vast template environment variables
@@ -25,7 +25,7 @@ https://raw.githubusercontent.com/<user>/<repo>/main/provisioning.sh
 Set these in the template:
 
 ```text
-PROVISIONING_SCRIPT=https://raw.githubusercontent.com/<user>/<repo>/main/provisioning.sh
+PROVISIONING_SCRIPT=https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
 ```
 
 The existing account-level `S3_*` variables are reused:

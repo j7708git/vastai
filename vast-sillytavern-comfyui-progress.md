@@ -50,8 +50,9 @@ bridge。
 | Krea 2 workflow JSON | 已完成 | `vast-krea2-t2i.json` 已準備 |
 | provisioning script | 已完成初版 | `provisioning.sh` 已寫入，尚未在 Vast 實測 |
 | Vast 測試 client | 已完成初版 | `vast_krea2_client.py` 已準備 |
+| GitHub repository | 已完成 | `https://github.com/j7708git/vastai` |
 | Vast endpoint | 未完成 | 尚未建立或確認 |
-| Vast provisioning public URL | 未完成 | 尚未 hosting raw script |
+| Vast provisioning public URL | 已完成 | `https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh` |
 | SillyTavern bridge | 未完成 | 目前尚未實作 |
 | SillyTavern 接線 | 未完成 | 尚未設定 |
 
@@ -188,7 +189,8 @@ IMAGE_COMPRESSOR_REPO
 
 - [x] `bash -n provisioning.sh` 語法檢查通過。
 - [x] 內嵌的 Python 下載邏輯語法檢查通過。
-- [ ] hosting 到 public GitHub / Gist raw URL。
+- [x] hosting 到 public GitHub repository。
+- [x] 取得 raw URL：https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
 - [ ] 在 Vast template 設定 `PROVISIONING_SCRIPT`。
 - [ ] 在 Vast worker 實際執行一次。
 
@@ -347,11 +349,11 @@ SillyTavern 中直接使用 Vast SDK。
 
 ### 9.1 部署前置
 
-- [ ] 把 `provisioning.sh` 上傳到 public GitHub repository 或 public Gist。
-- [ ] 取得 raw URL，格式例如：
+- [x] 把 `provisioning.sh` 上傳到 public GitHub repository。
+- [x] 使用 raw URL：
 
   ```text
-  https://raw.githubusercontent.com/<user>/<repo>/main/provisioning.sh
+  https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
   ```
 
 - [ ] 在 Vast Account Settings 確認 `S3_*` 環境變數。
@@ -382,7 +384,8 @@ SillyTavern 中直接使用 Vast SDK。
 
 1. 尚未建立或確認 Vast Serverless endpoint 名稱。
 2. 尚未取得 Vast API key。
-3. `provisioning.sh` 尚未 hosting 到 public raw URL。
+3. `provisioning.sh` 已上傳到 GitHub，但尚未在 Vast template 設定
+   `PROVISIONING_SCRIPT`，也未在 worker 實際執行。
 4. Krea 2 workflow 尚未在 Vast worker 上實際成功執行。
 5. `ImageCompressor` custom node 與 Vast 基礎 image 的相容性尚未驗證。
 6. SillyTavern / QIG 的實際 API 格式尚未確認。

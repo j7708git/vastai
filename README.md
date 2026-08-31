@@ -3,6 +3,12 @@
 這個目錄是「Vast.ai Serverless ComfyUI 呼叫 Krea 2 文生圖工作流，並透過本地
 bridge 接回 SillyTavern」的專案檔案。
 
+GitHub repository:
+
+```text
+https://github.com/j7708git/vastai
+```
+
 ## 目前功能
 
 - S3 已存放 Krea 2 UNet、text encoder 和 VAE。
