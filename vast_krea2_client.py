@@ -6,12 +6,26 @@ import json
 import os
 import sys
 import uuid
+from pathlib import Path
 
 from vastai import Serverless
 
 
 DEFAULT_WORKFLOW = "vast-krea2-t2i.json"
 DEFAULT_ENDPOINT = "my-comfyui-endpoint"
+
+
+def load_local_env(path: Path) -> None:
+    if not path.is_file():
+        return
+
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip())
 
 
 def load_workflow(path: str) -> dict:
@@ -69,6 +83,7 @@ async def main() -> int:
     parser.add_argument("--seed", type=int)
     args = parser.parse_args()
 
+    load_local_env(Path(__file__).resolve().parent / "vast-api-key.env")
     if not os.environ.get("VAST_API_KEY"):
         print("VAST_API_KEY is required", file=sys.stderr)
         return 1

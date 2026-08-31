@@ -3,3 +3,6 @@ vast-comfyui-s3-credentials.env
 
 # Local GitHub SSH keys used by Codex
 ssh_keys/
+
+# Vast API key read only by the local test client
+vast-api-key.env
