@@ -239,15 +239,16 @@ __RANDOM_INT__    seed，由 Vast 或 client / bridge 替換
 
 ### 6.3 注意事項
 
-工作流目前使用 `ImageCompressor` 作為輸出節點。provisioning script 會嘗試安裝
-對應 custom node；在 Vast 上第一次正式測試時，需要確認：
+工作流目前使用原生的 `SaveImage` 輸出節點，避免 custom node 尚未載入時阻擋
+Krea 2 主流程測試。provisioning script 仍會嘗試安裝 `ImageCompressor`，但
+目前 workflow 不依賴它。
 
-1. custom node 是否成功載入。
-2. workflow 是否通過 Vast 的 validation。
-3. 回傳的 `output` 是否包含可下載的 S3 presigned URL。
+正式測試時需要確認：
 
-如果正式測試發現沒有輸出，可以先用一般 ComfyUI `SaveImage` 節點診斷，確認
-ComfyUI 本身可以產生圖片，再決定是否保留 `ImageCompressor`。
+1. Krea 2 模型、text encoder 和 VAE 都能成功載入。
+2. workflow 通過 Vast 的 validation。
+3. 回傳的 `output` 包含可下載的 S3 presigned URL。
+4. 可以在 S3 中看到 `vast/krea2/` 下的輸出圖片。
 
 ## 7. Vast 測試 Client
 
@@ -387,7 +388,8 @@ SillyTavern 中直接使用 Vast SDK。
 3. `provisioning.sh` 已上傳到 GitHub，但尚未在 Vast template 設定
    `PROVISIONING_SCRIPT`，也未在 worker 實際執行。
 4. Krea 2 workflow 尚未在 Vast worker 上實際成功執行。
-5. `ImageCompressor` custom node 與 Vast 基礎 image 的相容性尚未驗證。
+5. `ImageCompressor` custom node 尚未在 Vast worker 成功載入；目前 workflow
+   已改用原生 `SaveImage`，壓縮節點可之後再修。
 6. SillyTavern / QIG 的實際 API 格式尚未確認。
 7. 是否使用 `lustifyNSFWCheckpoint_v10Krea2.safetensors` 或
    `moodyKrea2Mix_v70.safetensors` 尚未做最終選擇。

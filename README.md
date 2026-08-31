@@ -18,6 +18,9 @@ https://github.com/j7708git/vastai
 - `vast_krea2_client.py` 是本機測試 client，會把 prompt 替換進 workflow，
   再透過 Vast `/generate/sync` 呼叫。
 
+目前 workflow 使用原生的 `SaveImage` 輸出，先確認 Krea 2 主流程可正常生成；
+`ImageCompressor` custom node 會由 provisioning script 嘗試安裝，但不阻擋測試。
+
 ## 快速使用
 
 ```powershell

@@ -84,12 +84,13 @@ async def main() -> int:
     args = parser.parse_args()
 
     load_local_env(Path(__file__).resolve().parent / "vast-api-key.env")
-    if not os.environ.get("VAST_API_KEY"):
+    api_key = os.environ.get("VAST_API_KEY")
+    if not api_key:
         print("VAST_API_KEY is required", file=sys.stderr)
         return 1
 
     payload = build_payload(args)
-    async with Serverless() as client:
+    async with Serverless(api_key=api_key) as client:
         endpoint = await client.get_endpoint(name=args.endpoint)
         response = await endpoint.request("/generate/sync", payload)
 

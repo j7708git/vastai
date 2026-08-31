@@ -123,23 +123,17 @@
       "title": "Text String (User Prompt)"
     }
   },
-  "77": {
+  "78": {
     "inputs": {
-      "format": "PNG",
-      "quality": 85,
-      "resize_factor": 1,
-      "compression_level": 6,
-      "save_image": true,
-      "output_prefix": "compressed_",
-      "output_path": "",
+      "filename_prefix": "vast/krea2",
       "images": [
         "54",
         0
       ]
     },
-    "class_type": "ImageCompressor",
+    "class_type": "SaveImage",
     "_meta": {
-      "title": "Image Compressor"
+      "title": "Save Image"
     }
   }
 }
