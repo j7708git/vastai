@@ -40,6 +40,8 @@ else
   fi
 fi
 
+LORA_DIR="${LORA_DIR:-$COMFYUI_ROOT/models/krea2/loras}"
+
 VENV_PYTHON="${VENV_PYTHON:-}"
 if [ -z "$VENV_PYTHON" ] && [ -n "${COMFYUI_VENV_PYTHON:-}" ] && [ -x "$COMFYUI_VENV_PYTHON" ]; then
   VENV_PYTHON="$COMFYUI_VENV_PYTHON"
@@ -64,6 +66,8 @@ CLIP_S3_KEY="${CLIP_S3_KEY:-models/text_encoders/qwen3vl_4b_fp8_scaled.safetenso
 CLIP_FILENAME="${CLIP_FILENAME:-qwen3vl_4b_fp8_scaled.safetensors}"
 VAE_S3_KEY="${VAE_S3_KEY:-models/vae/qwen_image_vae.safetensors}"
 VAE_FILENAME="${VAE_FILENAME:-qwen_image_vae.safetensors}"
+LORA_S3_KEY="${LORA_S3_KEY:-models/krea2/loras/penis_size_krea2_v2_loraholic.safetensors}"
+LORA_FILENAME="${LORA_FILENAME:-penis_size_krea2_v2_loraholic.safetensors}"
 IMAGE_COMPRESSOR_REPO="${IMAGE_COMPRESSOR_REPO:-https://github.com/liuqianhonga/ComfyUI-Image-Compressor.git}"
 
 export S3_REGION="${S3_REGION:-ap-southeast-2}"
@@ -166,6 +170,10 @@ download_s3_object \
 download_s3_object \
   "$VAE_S3_KEY" \
   "$VAE_DIR/$VAE_FILENAME" \
+  required
+download_s3_object \
+  "$LORA_S3_KEY" \
+  "$LORA_DIR/$LORA_FILENAME" \
   required
 
 NODE_DIR="$COMFYUI_ROOT/custom_nodes/comfyui-image-compressor"

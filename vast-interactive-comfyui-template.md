@@ -108,18 +108,25 @@ lustifyNSFWCheckpoint_v10Krea2.safetensors
 moodyKrea2Mix_v70.safetensors
 ```
 
+LoRA 選單則會出現：
+
+```text
+krea2/loras/penis_size_krea2_v2_loraholic.safetensors
+```
+
 ## 5. Provisioning Script
 
 `provisioning.sh` 已改成自動偵測：
 
 - Vast 官方 ComfyUI base image：下載到
   `${WORKSPACE}/ComfyUI/models/{diffusion_models,text_encoders,vae}`，
+  以及 `${WORKSPACE}/ComfyUI/models/krea2/loras/`，
   custom node 放在 `${WORKSPACE}/ComfyUI/custom_nodes`
 - ai-dock interactive image：下載到
   `${WORKSPACE}/storage/stable_diffusion/models/{unet,clip,vae}`
 - `SERVERLESS=true`：維持原本 Vast Serverless 的下載路徑
 
-它仍會下載預設的 Krea2 UNet、Qwen text encoder、VAE，並嘗試安裝
+它仍會下載預設的 Krea2 UNet、Qwen text encoder、VAE、Krea2 LoRA，並嘗試安裝
 `ComfyUI-Image-Compressor`。目前 Krea2 workflow 只使用原生 `SaveImage`，
 所以 custom node 失敗不會擋住生圖。
 

@@ -26,6 +26,7 @@ Vast 官方 ComfyUI base image 會下載到實際執行 ComfyUI 的資料夾：
 ${WORKSPACE}/ComfyUI/models/diffusion_models/
 ${WORKSPACE}/ComfyUI/models/text_encoders/
 ${WORKSPACE}/ComfyUI/models/vae/
+${WORKSPACE}/ComfyUI/models/krea2/loras/
 ${WORKSPACE}/ComfyUI/custom_nodes/comfyui-image-compressor/
 ```
 
@@ -45,10 +46,10 @@ ${WORKSPACE}/storage/stable_diffusion/models/vae/
 models/diffusion_models/lustifyNSFWCheckpoint_v10Krea2.safetensors
 models/text_encoders/qwen3vl_4b_fp8_scaled.safetensors
 models/vae/qwen_image_vae.safetensors
+models/krea2/loras/penis_size_krea2_v2_loraholic.safetensors
 ```
 
-These three objects are confirmed present in the bucket. The provisioning
-script will fail early if any one is missing.
+The provisioning script will fail early if any required object is missing.
 
 ## Hosted script
 
@@ -86,6 +87,8 @@ CLIP_S3_KEY=models/text_encoders/qwen3vl_4b_fp8_scaled.safetensors
 CLIP_FILENAME=qwen3vl_4b_fp8_scaled.safetensors
 VAE_S3_KEY=models/vae/qwen_image_vae.safetensors
 VAE_FILENAME=qwen_image_vae.safetensors
+LORA_S3_KEY=models/krea2/loras/penis_size_krea2_v2_loraholic.safetensors
+LORA_FILENAME=penis_size_krea2_v2_loraholic.safetensors
 ```
 
 ## Note on the local workflow
