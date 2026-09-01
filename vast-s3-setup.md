@@ -29,3 +29,24 @@ Policy file: vast-comfyui-s3-policy.json
 The policy allows only HTTPS `s3:GetObject` and `s3:PutObject` on the
 dedicated bucket. It does not grant bucket listing, deletion, or permission
 management.
+
+## Output layout
+
+Vast's API wrapper uploads each ComfyUI request under its request ID. To keep
+user-visible images together, the local bridge copies them into:
+
+```text
+krea2/<timestamp>_<filename>.png
+```
+
+The bridge deletes the original `<request_id>/<filename>.png` object by default.
+Vast benchmark objects starting with `test-` are removed by an S3 lifecycle rule
+after one day.
+
+The S3 lifecycle rule is:
+
+```text
+ID: ExpireBenchmarkOutputs
+Prefix: test-
+Expiration: 1 day
+```

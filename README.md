@@ -65,6 +65,28 @@ SillyTavern 的內建 ComfyUI source 不支援 Vast Serverless 的 `/generate/sy
 目前 bridge 支援 `prompt`、`width`、`height`、`steps`、`seed`、CFG、
 sampler、scheduler 和最多 4 張批次。負面 prompt 尚未接到 workflow。
 
+Bridge 預設會使用本機 AWS profile `agent-toolkit`，把 Vast 回傳的圖片複製到：
+
+```text
+krea2/<timestamp>_<filename>.png
+```
+
+然後刪除 Vast 原本的 `<request_id>/` 臨時物件。如果暫時想保留原始目錄，加：
+
+```powershell
+--keep-s3
+```
+
+需要手動整理現有 S3 物件時：
+
+```powershell
+python s3_reorganize.py --profile agent-toolkit
+python s3_reorganize.py --profile agent-toolkit --apply
+```
+
+乾跑只會列出要搬移的物件；`--apply` 會把非模型物件搬進 `krea2/`，並刪除原始
+臨時物件。`test-*` benchmark 物件另外受 S3 lifecycle rule 保護，會在 1 天後刪除。
+
 ## 重要安全提醒
 
 `vast-comfyui-s3-credentials.env` 已加入 `.gitignore`，不會上傳。請不要把

@@ -55,6 +55,8 @@ bridge。
 | Vast endpoint | 已完成 | `vast-comfyui-krea2` 已建立並 Ready |
 | Vast provisioning public URL | 已完成 | `https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh` |
 | SillyTavern bridge | 初版已完成 | `vast_krea2_bridge.py` 已建立 |
+| S3 輸出資料夾 | 已完成 | 正式圖片統一放在 `krea2/`，臨時 UUID 目錄會刪除 |
+| S3 benchmark 清理 | 已完成 | `test-*` 物件設定 1 天 lifecycle expiration |
 | SillyTavern 接線 | 未完成 | 尚未在 QIG / SillyTavern 實測 |
 
 ## 3. AWS / S3 目前設定
@@ -100,6 +102,31 @@ arn:aws:s3:::vast-comfyui-730116069170-ap-southeast-2-an/*
 ```text
 vast-comfyui-s3-policy.json
 ```
+
+### 3.4 S3 檔案結構
+
+目前 S3 的正式檔案結構：
+
+```text
+models/
+  diffusion_models/
+  text_encoders/
+  vae/
+
+krea2/
+  <timestamp>_<filename>.png
+```
+
+Bridge 預設使用 AWS profile `agent-toolkit`，在 Vast 回傳圖片後：
+
+1. 把物件複製到 `krea2/<timestamp>_<filename>.png`。
+2. 刪除 Vast 的 `<request_id>/<filename>.png` 臨時物件。
+3. 回傳固定 `krea2/` 資料夾的 presigned URL。
+
+如要保留原始臨時物件，加 `--keep-s3`。
+
+Vast benchmark 產生的 `test-*` 物件會由 S3 lifecycle rule
+`ExpireBenchmarkOutputs` 在 1 天後刪除。此規則不影響 `models/` 與 `krea2/`。
 
 ## 4. S3 已上傳的模型
 
@@ -420,6 +447,7 @@ Payload mode    = extended
 | `vast-krea2-t2i.json` | Krea 2 API-format workflow | 初版完成 |
 | `vast_krea2_client.py` | 本機 Vast 測試 client | 初版完成 |
 | `vast_krea2_bridge.py` | SillyTavern OpenAI-compatible bridge | 初版完成 |
+| `s3_reorganize.py` | S3 圖片歸檔與臨時物件清理工具 | 初版完成 |
 | `requirements.txt` | bridge 與 client 依賴 | 初版完成 |
 | `vast-provisioning.md` | Provisioning 設定摘要 | 完成 |
 | `vast-s3-setup.md` | S3 非機密設定摘要 | 完成 |

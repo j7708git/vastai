@@ -2,6 +2,7 @@
 import argparse
 import asyncio
 import copy
+import datetime as dt
 import json
 import os
 import sys
@@ -9,6 +10,7 @@ import time
 import uuid
 from pathlib import Path
 
+import boto3
 from aiohttp import web
 from vastai import Serverless
 
@@ -17,6 +19,9 @@ DEFAULT_WORKFLOW = "vast-krea2-t2i.json"
 DEFAULT_ENDPOINT = "vast-comfyui-krea2"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
+DEFAULT_S3_PROFILE = "agent-toolkit"
+DEFAULT_S3_BUCKET = "vast-comfyui-730116069170-ap-southeast-2-an"
+DEFAULT_S3_PREFIX = "krea2"
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -128,6 +133,50 @@ async def generate_with_vast(payload: dict, endpoint_name: str, api_key: str):
         return await endpoint.request("/generate/sync", payload, cost=100)
 
 
+def s3_client(profile_name: str, bucket: str):
+    session = boto3.Session(profile_name=profile_name)
+    return session.client(
+        "s3",
+        region_name="ap-southeast-2",
+        endpoint_url="https://s3.ap-southeast-2.amazonaws.com",
+    )
+
+
+def normalize_vast_output(raw: dict, profile_name: str, bucket: str, prefix: str, clean: bool):
+    if not profile_name or not bucket:
+        return raw
+
+    response = raw.get("response", raw)
+    request_id = response.get("id")
+    outputs = response.get("output") or []
+    if not request_id or not outputs:
+        return raw
+
+    client = s3_client(profile_name, bucket)
+    for item in outputs:
+        filename = item.get("filename")
+        if not filename:
+            continue
+        source_key = f"{request_id}/{filename}"
+        timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        target_key = f"{prefix}/{timestamp}_{filename}"
+        client.copy_object(
+            Bucket=bucket,
+            Key=target_key,
+            CopySource={"Bucket": bucket, "Key": source_key},
+        )
+        if clean:
+            client.delete_object(Bucket=bucket, Key=source_key)
+        item["url"] = client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": target_key},
+            ExpiresIn=604800,
+        )
+        item["subfolder"] = prefix
+
+    return raw
+
+
 def response_payload(payload: dict) -> dict:
     response = payload.get("response", payload)
     outputs = response.get("output") or []
@@ -209,6 +258,13 @@ async def handle_generate(request: web.Request):
             request.app["endpoint_name"],
             request.app["api_key"],
         )
+        raw = normalize_vast_output(
+            raw,
+            request.app["s3_profile"],
+            request.app["s3_bucket"],
+            request.app["s3_prefix"],
+            request.app["clean_s3"],
+        )
         return json_response(response_payload(raw))
     except Exception as exc:
         return json_response({"error": str(exc)}, status=502)
@@ -235,6 +291,14 @@ def main() -> int:
     parser.add_argument("--workflow", default=DEFAULT_WORKFLOW)
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--s3-profile", default=DEFAULT_S3_PROFILE)
+    parser.add_argument("--s3-bucket", default=DEFAULT_S3_BUCKET)
+    parser.add_argument("--s3-prefix", default=DEFAULT_S3_PREFIX)
+    parser.add_argument(
+        "--keep-s3",
+        action="store_true",
+        help="Keep Vast's original request-id S3 objects after copying to krea2.",
+    )
     parser.add_argument("--prompt", help="Prompt for a one-off local test.")
     parser.add_argument("--width", type=int, default=768)
     parser.add_argument("--height", type=int, default=768)
@@ -257,6 +321,10 @@ def main() -> int:
     app["api_key"] = api_key
     app["endpoint_name"] = args.endpoint
     app["workflow_path"] = args.workflow
+    app["s3_profile"] = args.s3_profile
+    app["s3_bucket"] = args.s3_bucket
+    app["s3_prefix"] = args.s3_prefix
+    app["clean_s3"] = not args.keep_s3
     app.router.add_post("/v1/images/generations", handle_generate)
     app.router.add_get("/health", handle_health)
     app.router.add_route("OPTIONS", "/{tail:.*}", handle_options)
@@ -264,6 +332,13 @@ def main() -> int:
     if args.prompt:
         payload = build_payload(args)
         raw = asyncio.run(generate_with_vast(payload, args.endpoint, api_key))
+        raw = normalize_vast_output(
+            raw,
+            args.s3_profile,
+            args.s3_bucket,
+            args.s3_prefix,
+            not args.keep_s3,
+        )
         print(json.dumps(raw, indent=2, ensure_ascii=False))
         return 0
 
