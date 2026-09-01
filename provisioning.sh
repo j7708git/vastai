@@ -66,7 +66,7 @@ CLIP_S3_KEY="${CLIP_S3_KEY:-models/text_encoders/qwen3vl_4b_fp8_scaled.safetenso
 CLIP_FILENAME="${CLIP_FILENAME:-qwen3vl_4b_fp8_scaled.safetensors}"
 VAE_S3_KEY="${VAE_S3_KEY:-models/vae/qwen_image_vae.safetensors}"
 VAE_FILENAME="${VAE_FILENAME:-qwen_image_vae.safetensors}"
-LORA_S3_KEY="${LORA_S3_KEY:-models/krea2/loras/penis_size_krea2_v2_loraholic.safetensors}"
+LORA_S3_KEY="${LORA_S3_KEY:-models/loras/krea2/penis_size_krea2_v2_loraholic.safetensors}"
 LORA_FILENAME="${LORA_FILENAME:-penis_size_krea2_v2_loraholic.safetensors}"
 IMAGE_COMPRESSOR_REPO="${IMAGE_COMPRESSOR_REPO:-https://github.com/liuqianhonga/ComfyUI-Image-Compressor.git}"
 
