@@ -27,8 +27,9 @@ Caddy（port 8188）-> ComfyUI（port 18188）
 
 - [x] 確認官方 template 的 Cloudflare quick tunnel 設定
 - [x] 確認 SillyTavern 原生 ComfyUI 不帶 auth header，需設
-  `WEB_ENABLE_AUTH=false`
+  `ENABLE_AUTH=false`（Vast base image 讀這個變數）
 - [x] `provisioning.sh` 支援 ai-dock interactive image
+- [x] 目前實例已關 `ENABLE_AUTH`，外部 tunnel `/system_stats` 回 200
 - [ ] 在 Vast template 設定環境變數
 - [ ] 租一台 24 GB VRAM 實例
 - [ ] 從 Instance Portal 複製 tunnel URL

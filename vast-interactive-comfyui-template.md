@@ -23,6 +23,7 @@ Vast.ai 官方 ComfyUI template 以 ai-dock ComfyUI 為基底，預設啟動：
 
 ```text
 COMFYUI_ARGS=--disable-auto-launch --port 18188 --enable-cors-header
+ENABLE_AUTH=false
 WEB_ENABLE_AUTH=false
 WEB_ENABLE_HTTPS=false
 CF_QUICK_TUNNELS=true
@@ -48,15 +49,25 @@ OPEN_BUTTON_PORT=8188
 - VRAM：24 GB 以上（Krea2 UNet 約 13 GB，text encoder 約 5 GB）
 - Disk：100 GB 以上
 
-## 2. 為什麼要關 WEB_ENABLE_AUTH
+## 2. 為什麼要關 auth
+
+Vast 官方 base-image template 真正讀的是 `ENABLE_AUTH`；舊版 ai-dock image
+才讀 `WEB_ENABLE_AUTH`。兩個都設成 `false` 最保險，SillyTavern 才能直接連。
 
 SillyTavern 的標準 ComfyUI source 在 `/system_stats`、`/object_info`、
 `/prompt`、`/history`、`/view` 這些 request 上不會送出 Bearer 或 Basic auth
 header。ai-dock 的 Caddy 雖然支援 `?token=` 與 `Authorization: Bearer`，
-但 SillyTavern 不會幫我們帶，所以直連時要把 `WEB_ENABLE_AUTH` 設為 `false`。
+但 SillyTavern 不會幫我們帶，所以直連時要把 auth 關掉。
 
 代價是 tunnel URL 等同沒有密碼的公開 ComfyUI。請只把這個 URL 貼給自己的
 SillyTavern，用完立刻刪除實例，不要公開 URL。
+
+如果實例已經啟動才要關 auth，直接 SSH 進去執行：
+
+```bash
+printf 'ENABLE_AUTH=false\n' >> /workspace/.env
+supervisorctl restart caddy
+```
 
 ## 3. 取得 ComfyUI URL
 

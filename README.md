@@ -25,6 +25,7 @@ vast-interactive-comfyui-template.md
 
 ```text
 COMFYUI_ARGS=--disable-auto-launch --port 18188 --enable-cors-header
+ENABLE_AUTH=false
 WEB_ENABLE_AUTH=false
 PROVISIONING_SCRIPT=https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
 ```

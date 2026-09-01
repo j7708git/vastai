@@ -10,6 +10,7 @@ Serverless template。
 ```text
 PROVISIONING_SCRIPT=https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
 COMFYUI_ARGS=--disable-auto-launch --port 18188 --enable-cors-header
+ENABLE_AUTH=false
 WEB_ENABLE_AUTH=false
 WEB_ENABLE_HTTPS=false
 CF_QUICK_TUNNELS=true
