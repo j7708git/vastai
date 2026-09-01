@@ -5,9 +5,49 @@ log() { echo "[provision] $*"; }
 die() { echo "[provision][error] $*" >&2; exit 1; }
 
 WORKSPACE="${WORKSPACE:-/workspace}"
-COMFYUI_ROOT="${COMFYUI_PATH:-${WORKSPACE}/ComfyUI}"
-VENV_PYTHON="${VENV_PYTHON:-/venv/main/bin/python}"
-if [ ! -x "$VENV_PYTHON" ]; then
+
+# ai-dock interactive images expose these helpers; serverless images do not.
+if [ -f /opt/ai-dock/etc/environment.sh ]; then
+  # shellcheck source=/dev/null
+  . /opt/ai-dock/etc/environment.sh
+fi
+if [ -f /opt/ai-dock/bin/venv-set.sh ]; then
+  # shellcheck source=/dev/null
+  . /opt/ai-dock/bin/venv-set.sh comfyui
+fi
+
+if [ "${SERVERLESS,,}" = "true" ]; then
+  COMFYUI_ROOT="${COMFYUI_PATH:-${WORKSPACE}/ComfyUI}"
+  MODEL_DIR="${MODEL_DIR:-$COMFYUI_ROOT/models/diffusion_models}"
+  CLIP_DIR="${CLIP_DIR:-$COMFYUI_ROOT/models/text_encoders}"
+  VAE_DIR="${VAE_DIR:-$COMFYUI_ROOT/models/vae}"
+else
+  COMFYUI_ROOT="${COMFYUI_PATH:-/opt/ComfyUI}"
+  if [ -d "$WORKSPACE/storage/stable_diffusion/models" ]; then
+    MODEL_DIR="${MODEL_DIR:-$WORKSPACE/storage/stable_diffusion/models/unet}"
+    CLIP_DIR="${CLIP_DIR:-$WORKSPACE/storage/stable_diffusion/models/clip}"
+    VAE_DIR="${VAE_DIR:-$WORKSPACE/storage/stable_diffusion/models/vae}"
+  else
+    MODEL_DIR="${MODEL_DIR:-$COMFYUI_ROOT/models/diffusion_models}"
+    CLIP_DIR="${CLIP_DIR:-$COMFYUI_ROOT/models/text_encoders}"
+    VAE_DIR="${VAE_DIR:-$COMFYUI_ROOT/models/vae}"
+  fi
+fi
+
+VENV_PYTHON="${VENV_PYTHON:-}"
+if [ -z "$VENV_PYTHON" ] && [ -n "${COMFYUI_VENV_PYTHON:-}" ] && [ -x "$COMFYUI_VENV_PYTHON" ]; then
+  VENV_PYTHON="$COMFYUI_VENV_PYTHON"
+fi
+if [ -z "$VENV_PYTHON" ] && [ -x "$COMFYUI_ROOT/venv/bin/python" ]; then
+  VENV_PYTHON="$COMFYUI_ROOT/venv/bin/python"
+fi
+if [ -z "$VENV_PYTHON" ] && [ -x /opt/ai-dock/venv/comfyui/bin/python ]; then
+  VENV_PYTHON=/opt/ai-dock/venv/comfyui/bin/python
+fi
+if [ -z "$VENV_PYTHON" ] && [ -x /venv/main/bin/python ]; then
+  VENV_PYTHON=/venv/main/bin/python
+fi
+if [ -z "$VENV_PYTHON" ]; then
   VENV_PYTHON="$(command -v python3 || command -v python || true)"
 fi
 [ -n "$VENV_PYTHON" ] || die "python3 not found"
@@ -111,15 +151,15 @@ log "ComfyUI root: $COMFYUI_ROOT"
 
 download_s3_object \
   "$MODEL_S3_KEY" \
-  "$COMFYUI_ROOT/models/diffusion_models/$MODEL_FILENAME" \
+  "$MODEL_DIR/$MODEL_FILENAME" \
   required
 download_s3_object \
   "$CLIP_S3_KEY" \
-  "$COMFYUI_ROOT/models/text_encoders/$CLIP_FILENAME" \
+  "$CLIP_DIR/$CLIP_FILENAME" \
   required
 download_s3_object \
   "$VAE_S3_KEY" \
-  "$COMFYUI_ROOT/models/vae/$VAE_FILENAME" \
+  "$VAE_DIR/$VAE_FILENAME" \
   required
 
 NODE_DIR="$COMFYUI_ROOT/custom_nodes/comfyui-image-compressor"

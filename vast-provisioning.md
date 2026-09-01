@@ -1,5 +1,32 @@
 # Vast.ai ComfyUI provisioning
 
+## Official interactive template
+
+`provisioning.sh` 同時支援 Vast.ai 官方互動式 ComfyUI template 與原本的
+Serverless template。
+
+互動式 template 需要設定：
+
+```text
+PROVISIONING_SCRIPT=https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
+COMFYUI_ARGS=--disable-auto-launch --port 18188 --enable-cors-header
+WEB_ENABLE_AUTH=false
+WEB_ENABLE_HTTPS=false
+CF_QUICK_TUNNELS=true
+OPEN_BUTTON_PORT=8188
+```
+
+互動式 image 會優先下載到 ai-dock 的 workspace storage：
+
+```text
+${WORKSPACE}/storage/stable_diffusion/models/unet/
+${WORKSPACE}/storage/stable_diffusion/models/clip/
+${WORKSPACE}/storage/stable_diffusion/models/vae/
+```
+
+如果 workspace storage 不存在，會改寫到 `/opt/ComfyUI/models/...`。
+完整的 SillyTavern 設定步驟見 `vast-interactive-comfyui-template.md`。
+
 ## S3 objects expected by `provisioning.sh`
 
 ```text

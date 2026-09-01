@@ -1,13 +1,39 @@
-# Vast.ai Serverless ComfyUI Krea 2 + SillyTavern
+# Vast.ai ComfyUI Krea 2 + SillyTavern
 
-這個目錄是「Vast.ai Serverless ComfyUI 呼叫 Krea 2 文生圖工作流，並透過本地
-bridge 接回 SillyTavern」的專案檔案。
+這個目錄是「Vast.ai 上的 ComfyUI 呼叫 Krea 2 文生圖工作流，並讓 SillyTavern
+直接用 ComfyUI API 生圖」的專案檔案。
 
 GitHub repository:
 
 ```text
 https://github.com/j7708git/vastai
 ```
+
+## 推薦方案：官方互動式 Template 直連
+
+如果你不想再處理 Serverless，請改用 Vast.ai 官方 ComfyUI template。它內建
+Cloudflare quick tunnel，SillyTavern 可以直接連 ComfyUI API，不需要本機
+bridge，也不需要 Vast API key。
+
+完整設定步驟：
+
+```text
+vast-interactive-comfyui-template.md
+```
+
+重點只有三件事：
+
+```text
+COMFYUI_ARGS=--disable-auto-launch --port 18188 --enable-cors-header
+WEB_ENABLE_AUTH=false
+PROVISIONING_SCRIPT=https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
+```
+
+SillyTavern 的 ComfyUI URL 填 Instance Portal 裡拿到的
+`https://xxxx.trycloudflare.com`，Workflow 選
+`sillytavern-krea2-workflow.json`。
+
+原本的 Serverless + 本地 bridge 方案仍保留在下方，作為備援。
 
 ## 目前功能
 
@@ -17,6 +43,8 @@ https://github.com/j7708git/vastai
 - `vast-krea2-t2i.json` 是 Vast-ready 的 ComfyUI API-format workflow。
 - `vast_krea2_client.py` 是本機測試 client，會把 prompt 替換進 workflow，
   再透過 Vast `/generate/sync` 呼叫。
+- `vast_krea2_bridge.py` 可作為 Serverless 橋接，或作為真實 ComfyUI 的
+  proxy 備援。
 
 目前 workflow 使用原生的 `SaveImage` 輸出，先確認 Krea 2 主流程可正常生成；
 `ImageCompressor` custom node 會由 provisioning script 嘗試安裝，但不阻擋測試。
@@ -35,7 +63,7 @@ python vast_krea2_client.py `
 Vast worker 需要讀取 S3 與 provisioning script。非機密設定與下一步請看
 [`vast-sillytavern-comfyui-progress.md`](vast-sillytavern-comfyui-progress.md)。
 
-## SillyTavern Bridge
+## 舊方案：SillyTavern Bridge（Serverless）
 
 本機提供一個 OpenAI-compatible bridge，讓 SillyTavern 的 QIG
 （`sillytavern-image-gen`）可以透過 `vastai` SDK 呼叫 Vast Serverless：

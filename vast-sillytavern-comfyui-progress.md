@@ -1,40 +1,38 @@
-# Vast.ai Serverless ComfyUI + SillyTavern 專案進度
+# Vast.ai ComfyUI + SillyTavern 專案進度
 
-## 1. 最終目標
+## 1. 最新決定
 
-讓 SillyTavern 可以透過 Vast.ai Serverless 上的 ComfyUI 呼叫一個自訂的 Krea 2
-文生圖工作流，並使用使用者自己的主模型。目前先專注在單一 Krea 2 文生圖工作流，
-後續再完成 SillyTavern 的橋接與實際接線。
-
-這個專案目前採用以下架構：
+改用 Vast.ai 官方互動式 ComfyUI template 直連 SillyTavern，不再依賴
+Serverless + bridge。官方 template 內建 ai-dock ComfyUI 與 Cloudflare
+quick tunnel，SillyTavern 可以直接連 ComfyUI API。
 
 ```text
-SillyTavern / QIG
-        |
-        | HTTP
-        v
-本機 bridge / proxy（OpenAI-compatible API）
-        |
-        | vastai SDK
-        v
-Vast Serverless
-        |
-        | /route/ + worker 選擇 + 簽名
-        v
-PyWorker
-        |
-        | /generate/sync
-        v
-ComfyUI API Wrapper -> ComfyUI -> S3
-        |
-        v
-回傳圖片 presigned URL
+SillyTavern
+    |
+    | HTTPS
+    v
+https://xxxx.trycloudflare.com（Cloudflare quick tunnel）
+    |
+    v
+Caddy（port 8188）-> ComfyUI（port 18188）
 ```
 
-重要限制：Vast Serverless 不會直接公開 ComfyUI 原本的 `POST /prompt`、
-`/history` 和 WebSocket `/ws` 作為外部 API。官方的 ComfyUI Serverless 模板對外
-提供的是 PyWorker 的 `/generate/sync`，因此需要在 SillyTavern 與 Vast 之間加一層
-bridge。
+模型下載仍由 `provisioning.sh` 自動完成。完整步驟見
+`vast-interactive-comfyui-template.md`。
+
+原先的 Serverless 方案記錄保留在下方；若之後想回去用 Serverless，bridge
+仍然可用。
+
+### 1.1 互動實例直連進度
+
+- [x] 確認官方 template 的 Cloudflare quick tunnel 設定
+- [x] 確認 SillyTavern 原生 ComfyUI 不帶 auth header，需設
+  `WEB_ENABLE_AUTH=false`
+- [x] `provisioning.sh` 支援 ai-dock interactive image
+- [ ] 在 Vast template 設定環境變數
+- [ ] 租一台 24 GB VRAM 實例
+- [ ] 從 Instance Portal 複製 tunnel URL
+- [ ] 在 SillyTavern 選 `sillytavern-krea2-workflow.json` 實測生圖
 
 ## 2. 已完成項目
 

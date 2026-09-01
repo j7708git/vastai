@@ -13,7 +13,7 @@ from pathlib import Path
 import urllib.request
 
 import boto3
-from aiohttp import web
+from aiohttp import ClientSession, web
 from vastai import Serverless
 
 
@@ -420,6 +420,14 @@ def parse_request_body(body: dict, workflow_path: str) -> dict:
 
 
 async def handle_generate(request: web.Request):
+    if request.app.get("comfy_url"):
+        return json_response(
+            {
+                "error": "OpenAI-compatible generation is unavailable in proxy mode; use the native ComfyUI endpoints.",
+            },
+            status=400,
+        )
+
     api_token = request.app.get("api_token")
     if api_token:
         authorization = request.headers.get("Authorization", "")
@@ -460,6 +468,9 @@ async def handle_health(request: web.Request):
 
 
 async def handle_comfy_prompt(request: web.Request):
+    if request.app.get("comfy_url"):
+        return await proxy_to_comfy(request, request.app, "prompt")
+
     try:
         raw = await request.json()
         workflow = extract_workflow(raw)
@@ -498,6 +509,13 @@ def comfy_history_item(job: dict) -> dict:
 
 
 async def handle_comfy_history(request: web.Request):
+    if request.app.get("comfy_url"):
+        suffix = "history"
+        prompt_id = request.match_info.get("prompt_id")
+        if prompt_id:
+            suffix = f"history/{prompt_id}"
+        return await proxy_to_comfy(request, request.app, suffix)
+
     prompt_id = request.match_info.get("prompt_id")
     history = {
         job_id: comfy_history_item(job)
@@ -510,6 +528,9 @@ async def handle_comfy_history(request: web.Request):
 
 
 async def handle_comfy_view(request: web.Request):
+    if request.app.get("comfy_url"):
+        return await proxy_to_comfy(request, request.app, "view")
+
     filename = request.query.get("filename", "")
     image = _COMFY_IMAGES.get(filename)
     if image is None:
@@ -518,6 +539,9 @@ async def handle_comfy_view(request: web.Request):
 
 
 async def handle_system_stats(request: web.Request):
+    if request.app.get("comfy_url"):
+        return await proxy_to_comfy(request, request.app, "system_stats")
+
     return json_response(
         {
             "system": {
@@ -530,6 +554,13 @@ async def handle_system_stats(request: web.Request):
 
 
 async def handle_object_info(request: web.Request):
+    if request.app.get("comfy_url"):
+        suffix = "object_info"
+        class_type = request.match_info.get("class_type")
+        if class_type:
+            suffix = f"object_info/{class_type}"
+        return await proxy_to_comfy(request, request.app, suffix)
+
     data = object_info_data()
     class_type = request.match_info.get("class_type")
     if class_type:
@@ -540,7 +571,41 @@ async def handle_object_info(request: web.Request):
 
 
 async def handle_interrupt(request: web.Request):
+    if request.app.get("comfy_url"):
+        return await proxy_to_comfy(request, request.app, "interrupt")
+
     return json_response({"ok": True})
+
+
+async def proxy_to_comfy(request: web.Request, app: web.Application, suffix: str):
+    comfy_url = app.get("comfy_url")
+    if not comfy_url:
+        return json_response({"error": "ComfyUI backend not configured"}, status=400)
+
+    base = comfy_url.rstrip("/")
+    url = f"{base}/{suffix.lstrip('/')}"
+    query = request.query_string
+    if query:
+        url += f"?{query}"
+
+    headers = {}
+    content_type = request.headers.get("Content-Type")
+    if content_type:
+        headers["Content-Type"] = content_type
+    authorization = request.headers.get("Authorization")
+    if authorization:
+        headers["Authorization"] = authorization
+    body = await request.read()
+
+    async with ClientSession() as session:
+        async with session.request(request.method, url, data=body, headers=headers) as response:
+            data = await response.read()
+            return web.Response(
+                body=data,
+                status=response.status,
+                content_type=response.content_type or "application/json",
+                headers=CORS_HEADERS,
+            )
 
 
 async def handle_options(request: web.Request):
@@ -553,6 +618,10 @@ def main() -> int:
     )
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--workflow", default=DEFAULT_WORKFLOW)
+    parser.add_argument(
+        "--comfy-url",
+        help="Proxy native ComfyUI endpoints to a real ComfyUI backend instead of Vast Serverless.",
+    )
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--s3-profile", default=DEFAULT_S3_PROFILE)
@@ -577,14 +646,18 @@ def main() -> int:
 
     local_env = Path(__file__).resolve().parent / "vast-api-key.env"
     load_local_env(local_env)
-    api_key = os.environ.get("VAST_API_KEY")
-    if not api_key:
+    comfy_url = args.comfy_url
+    api_key = None
+    if not comfy_url:
+        api_key = os.environ.get("VAST_API_KEY")
+    if not comfy_url and not api_key:
         print("VAST_API_KEY is required in vast-api-key.env", file=sys.stderr)
         return 1
     api_token = os.environ.get("BRIDGE_TOKEN") or args.api_token
 
     app = web.Application()
     app["api_key"] = api_key
+    app["comfy_url"] = comfy_url
     app["api_token"] = api_token
     app["endpoint_name"] = args.endpoint
     app["workflow_path"] = args.workflow
@@ -613,6 +686,9 @@ def main() -> int:
     app.router.add_route("OPTIONS", "/{tail:.*}", handle_options)
 
     if args.prompt:
+        if comfy_url:
+            print("--prompt is only supported in Vast Serverless mode", file=sys.stderr)
+            return 2
         payload = build_payload(args)
         raw = asyncio.run(generate_with_vast(payload, args.endpoint, api_key))
         raw = normalize_vast_output(
