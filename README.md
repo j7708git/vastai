@@ -35,6 +35,36 @@ python vast_krea2_client.py `
 Vast worker 需要讀取 S3 與 provisioning script。非機密設定與下一步請看
 [`vast-sillytavern-comfyui-progress.md`](vast-sillytavern-comfyui-progress.md)。
 
+## SillyTavern Bridge
+
+本機提供一個 OpenAI-compatible bridge，讓 SillyTavern 的 QIG
+（`sillytavern-image-gen`）可以透過 `vastai` SDK 呼叫 Vast Serverless：
+
+```powershell
+pip install -r requirements.txt
+python vast_krea2_bridge.py --endpoint vast-comfyui-krea2
+```
+
+Bridge 預設監聽：
+
+```text
+http://127.0.0.1:8765/v1
+```
+
+在 QIG 的 `Reverse Proxy (OpenAI-compatible)` 設定中：
+
+```text
+Base URL        = http://127.0.0.1:8765/v1
+Endpoint mode   = images_generations
+Payload mode    = extended
+```
+
+SillyTavern 的內建 ComfyUI source 不支援 Vast Serverless 的 `/generate/sync`
+與 worker route/auth，因此不要用內建 ComfyUI source；改用上面這個 bridge。
+
+目前 bridge 支援 `prompt`、`width`、`height`、`steps`、`seed`、CFG、
+sampler、scheduler 和最多 4 張批次。負面 prompt 尚未接到 workflow。
+
 ## 重要安全提醒
 
 `vast-comfyui-s3-credentials.env` 已加入 `.gitignore`，不會上傳。請不要把

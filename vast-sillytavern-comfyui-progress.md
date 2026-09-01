@@ -48,13 +48,14 @@ bridge。
 | AWS 存取憑證 | 已完成 | 已存放在本機 Git-ignored 檔案 |
 | 模型上傳 | 已完成 | UNet、text encoder、VAE 均已上傳 |
 | Krea 2 workflow JSON | 已完成 | `vast-krea2-t2i.json` 已準備 |
-| provisioning script | 已完成初版 | `provisioning.sh` 已寫入，尚未在 Vast 實測 |
+| provisioning script | 已完成 | `provisioning.sh` 已在 Vast worker 成功下載模型 |
 | Vast 測試 client | 已完成初版 | `vast_krea2_client.py` 已準備 |
 | GitHub repository | 已完成 | `https://github.com/j7708git/vastai` |
-| Vast endpoint | 未完成 | 尚未建立或確認 |
+| Vast Krea 2 實測 | 已完成 | `vast-comfyui-krea2` 已成功產生並回傳 S3 URL |
+| Vast endpoint | 已完成 | `vast-comfyui-krea2` 已建立並 Ready |
 | Vast provisioning public URL | 已完成 | `https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh` |
-| SillyTavern bridge | 未完成 | 目前尚未實作 |
-| SillyTavern 接線 | 未完成 | 尚未設定 |
+| SillyTavern bridge | 初版已完成 | `vast_krea2_bridge.py` 已建立 |
+| SillyTavern 接線 | 未完成 | 尚未在 QIG / SillyTavern 實測 |
 
 ## 3. AWS / S3 目前設定
 
@@ -309,7 +310,7 @@ Vast worker 的標準 ComfyUI endpoint。
 
 ### 8.2 建議的 bridge
 
-在 SillyTavern 所在電腦上跑一個小型 HTTP service，例如 FastAPI 或 Flask：
+在 SillyTavern 所在電腦上跑 `vast_krea2_bridge.py`：
 
 ```text
 POST /v1/images/generations
@@ -337,6 +338,22 @@ Bridge 的責任：
 只有 bridge 需要安裝 `vastai`。SillyTavern 本身不需要安裝，也不需要在
 SillyTavern 中直接使用 Vast SDK。
 
+啟動：
+
+```powershell
+pip install -r requirements.txt
+python vast_krea2_bridge.py --endpoint vast-comfyui-krea2
+```
+
+QIG 設定：
+
+```text
+Provider        = Reverse Proxy (OpenAI-compatible)
+Base URL        = http://127.0.0.1:8765/v1
+Endpoint mode   = images_generations
+Payload mode    = extended
+```
+
 ### 8.3 安全與執行建議
 
 - bridge 預設只綁定 `127.0.0.1`。
@@ -357,43 +374,42 @@ SillyTavern 中直接使用 Vast SDK。
   https://raw.githubusercontent.com/j7708git/vastai/main/provisioning.sh
   ```
 
-- [ ] 在 Vast Account Settings 確認 `S3_*` 環境變數。
-- [ ] 在 Vast template 設定 `PROVISIONING_SCRIPT`。
-- [ ] 建立 Serverless endpoint / workergroup。
-- [ ] 確認 GPU VRAM 和 endpoint 名稱。
-- [ ] 等待 worker 完成 provisioning、benchmark 和 ready 狀態。
+- [x] 在 Vast Account Settings 確認 `S3_*` 環境變數。
+- [x] 在 Vast template 設定 `PROVISIONING_SCRIPT`。
+- [x] 建立 Serverless endpoint / workergroup。
+- [x] 確認 GPU VRAM 和 endpoint 名稱。
+- [x] 等待 worker 完成 provisioning、benchmark 和 ready 狀態。
 
 ### 9.2 驗證 Krea 2 workflow
 
-- [ ] 使用 `vast_krea2_client.py` 送一筆 request。
-- [ ] 確認 response 的 `status` 是 `completed`。
-- [ ] 確認 response 的 `output` 包含 S3 URL。
-- [ ] 打開圖片確認模型、VAE、prompt 都正確。
+- [x] 使用 `vast_krea2_client.py` 送一筆 request。
+- [x] 確認 response 的 `status` 是 `completed`。
+- [x] 確認 response 的 `output` 包含 S3 URL。
+- [x] 打開圖片確認模型、VAE、prompt 都正確。
 - [ ] 確認冷啟動、第一次下載模型和 benchmark 時間是否可接受。
 
 ### 9.3 完成 SillyTavern 接線
 
-- [ ] 確認 SillyTavern 使用的 image generation extension 或 QIG 的 API 格式。
-- [ ] 確認 QIG 是否使用 `%prompt%` 或其他 placeholder。
-- [ ] 實作本地 bridge API。
-- [ ] 在 bridge 中設定 Vast endpoint name。
+- [x] 確認 SillyTavern 使用的 image generation extension 或 QIG 的 API 格式。
+- [x] 確認 QIG 使用 OpenAI-compatible `/v1/images/generations`。
+- [x] 實作本地 bridge API。
+- [x] 在 bridge 中設定 Vast endpoint name。
 - [ ] 用 curl 或其他 client 測試 bridge。
 - [ ] 在 SillyTavern 設定 custom API / reverse proxy 指到 bridge。
 - [ ] 從 SillyTavern 送出一張圖，確認圖片 URL 可下載。
 
 ## 10. 已知尚未確認事項
 
-1. 尚未建立或確認 Vast Serverless endpoint 名稱。
-2. 尚未取得 Vast API key。
-3. `provisioning.sh` 已上傳到 GitHub，但尚未在 Vast template 設定
-   `PROVISIONING_SCRIPT`，也未在 worker 實際執行。
-4. Krea 2 workflow 尚未在 Vast worker 上實際成功執行。
+1. Vast Serverless endpoint 名稱為 `vast-comfyui-krea2`。
+2. Vast API key 已存放在本機 Git-ignored 的 `vast-api-key.env`。
+3. `provisioning.sh` 已從 GitHub raw URL 在 Vast worker 實際執行。
+4. Krea 2 workflow 已在 Vast worker 上成功產生圖片。
 5. `ImageCompressor` custom node 尚未在 Vast worker 成功載入；目前 workflow
    已改用原生 `SaveImage`，壓縮節點可之後再修。
 6. SillyTavern / QIG 的實際 API 格式尚未確認。
 7. 是否使用 `lustifyNSFWCheckpoint_v10Krea2.safetensors` 或
    `moodyKrea2Mix_v70.safetensors` 尚未做最終選擇。
-8. 目前沒有實作 bridge。
+8. Bridge 已建立，但尚未在 QIG / SillyTavern 中實際測試。
 
 ## 11. 目前檔案清單
 
@@ -403,6 +419,8 @@ SillyTavern 中直接使用 Vast SDK。
 | `provisioning.sh` | 下載模型與 custom node | 初版完成 |
 | `vast-krea2-t2i.json` | Krea 2 API-format workflow | 初版完成 |
 | `vast_krea2_client.py` | 本機 Vast 測試 client | 初版完成 |
+| `vast_krea2_bridge.py` | SillyTavern OpenAI-compatible bridge | 初版完成 |
+| `requirements.txt` | bridge 與 client 依賴 | 初版完成 |
 | `vast-provisioning.md` | Provisioning 設定摘要 | 完成 |
 | `vast-s3-setup.md` | S3 非機密設定摘要 | 完成 |
 | `vast-comfyui-s3-policy.json` | S3 物件權限策略 | 完成 |
