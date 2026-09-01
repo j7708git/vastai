@@ -17,7 +17,7 @@ from vastai import Serverless
 
 DEFAULT_WORKFLOW = "vast-krea2-t2i.json"
 DEFAULT_ENDPOINT = "vast-comfyui-krea2"
-DEFAULT_HOST = "127.0.0.1"
+DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8765
 DEFAULT_S3_PROFILE = "agent-toolkit"
 DEFAULT_S3_BUCKET = "vast-comfyui-730116069170-ap-southeast-2-an"
@@ -246,6 +246,12 @@ def parse_request_body(body: dict, workflow_path: str) -> dict:
 
 
 async def handle_generate(request: web.Request):
+    api_token = request.app.get("api_token")
+    if api_token:
+        authorization = request.headers.get("Authorization", "")
+        if authorization != f"Bearer {api_token}":
+            return json_response({"error": "Unauthorized"}, status=401)
+
     try:
         body = await request.json()
     except Exception:
@@ -294,6 +300,7 @@ def main() -> int:
     parser.add_argument("--s3-profile", default=DEFAULT_S3_PROFILE)
     parser.add_argument("--s3-bucket", default=DEFAULT_S3_BUCKET)
     parser.add_argument("--s3-prefix", default=DEFAULT_S3_PREFIX)
+    parser.add_argument("--api-token", default=os.environ.get("BRIDGE_TOKEN"))
     parser.add_argument(
         "--keep-s3",
         action="store_true",
@@ -316,9 +323,11 @@ def main() -> int:
     if not api_key:
         print("VAST_API_KEY is required in vast-api-key.env", file=sys.stderr)
         return 1
+    api_token = os.environ.get("BRIDGE_TOKEN") or args.api_token
 
     app = web.Application()
     app["api_key"] = api_key
+    app["api_token"] = api_token
     app["endpoint_name"] = args.endpoint
     app["workflow_path"] = args.workflow
     app["s3_profile"] = args.s3_profile

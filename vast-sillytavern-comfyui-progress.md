@@ -372,18 +372,27 @@ pip install -r requirements.txt
 python vast_krea2_bridge.py --endpoint vast-comfyui-krea2
 ```
 
-QIG 設定：
+QIG 設定（從另一台同網段電腦連線）：
 
 ```text
 Provider        = Reverse Proxy (OpenAI-compatible)
-Base URL        = http://127.0.0.1:8765/v1
+Base URL        = http://<這台主機的LAN IP>:8765/v1
 Endpoint mode   = images_generations
 Payload mode    = extended
 ```
 
 ### 8.3 安全與執行建議
 
-- bridge 預設只綁定 `127.0.0.1`。
+- bridge 預設綁定 `0.0.0.0`，只開放 Windows firewall 的 `8765` port。
+- firewall 規則使用 `LocalSubnet`，讓同一個 Wi-Fi 子網路的電腦可以連線。
+- QIG 的 Base URL 要使用啟動 bridge 的主機 LAN IP，不是另一台電腦自己的 IP。
+- 可在 `vast-api-key.env` 加入 `BRIDGE_TOKEN=...`，QIG 的 API Key 填同一個值。
+
+如果 Windows 沒有自動放行 `8765`，請在管理員 PowerShell 執行：
+
+```powershell
+New-NetFirewallRule -DisplayName "Vast ComfyUI Bridge 8765" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8765 -RemoteAddress LocalSubnet
+```
 - 不要公開 Vast API key。
 - 不要公開 AWS S3 的 secret key。
 - 如果必須遠端存取，只建議透過本機反向代理並加上鑑權。
