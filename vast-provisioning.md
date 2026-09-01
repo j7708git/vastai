@@ -20,7 +20,16 @@ OPEN_BUTTON_PORT=8188
 如果 template 原本已有 `OPEN_BUTTON_PORT`，直接把值改成 `8188` 就好，不要
 重複新增。
 
-互動式 image 會優先下載到 ai-dock 的 workspace storage：
+Vast 官方 ComfyUI base image 會下載到實際執行 ComfyUI 的資料夾：
+
+```text
+${WORKSPACE}/ComfyUI/models/diffusion_models/
+${WORKSPACE}/ComfyUI/models/text_encoders/
+${WORKSPACE}/ComfyUI/models/vae/
+${WORKSPACE}/ComfyUI/custom_nodes/comfyui-image-compressor/
+```
+
+舊版 ai-dock interactive image 會下載到 workspace storage：
 
 ```text
 ${WORKSPACE}/storage/stable_diffusion/models/unet/
@@ -28,7 +37,6 @@ ${WORKSPACE}/storage/stable_diffusion/models/clip/
 ${WORKSPACE}/storage/stable_diffusion/models/vae/
 ```
 
-如果 workspace storage 不存在，會改寫到 `/opt/ComfyUI/models/...`。
 完整的 SillyTavern 設定步驟見 `vast-interactive-comfyui-template.md`。
 
 ## S3 objects expected by `provisioning.sh`

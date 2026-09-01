@@ -112,10 +112,12 @@ moodyKrea2Mix_v70.safetensors
 
 `provisioning.sh` 已改成自動偵測：
 
-- `SERVERLESS=true`：維持原本 Vast Serverless 的下載路徑
+- Vast 官方 ComfyUI base image：下載到
+  `${WORKSPACE}/ComfyUI/models/{diffusion_models,text_encoders,vae}`，
+  custom node 放在 `${WORKSPACE}/ComfyUI/custom_nodes`
 - ai-dock interactive image：下載到
   `${WORKSPACE}/storage/stable_diffusion/models/{unet,clip,vae}`
-  或 `/opt/ComfyUI/models/...`
+- `SERVERLESS=true`：維持原本 Vast Serverless 的下載路徑
 
 它仍會下載預設的 Krea2 UNet、Qwen text encoder、VAE，並嘗試安裝
 `ComfyUI-Image-Compressor`。目前 Krea2 workflow 只使用原生 `SaveImage`，

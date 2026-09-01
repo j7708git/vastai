@@ -16,7 +16,13 @@ if [ -f /opt/ai-dock/bin/venv-set.sh ]; then
   . /opt/ai-dock/bin/venv-set.sh comfyui
 fi
 
-if [ "${SERVERLESS,,}" = "true" ]; then
+if [ -f /opt/supervisor-scripts/comfyui.sh ]; then
+  # Vast official ComfyUI base image: ComfyUI runs from ${WORKSPACE}/ComfyUI
+  COMFYUI_ROOT="${COMFYUI_PATH:-${WORKSPACE}/ComfyUI}"
+  MODEL_DIR="${MODEL_DIR:-$COMFYUI_ROOT/models/diffusion_models}"
+  CLIP_DIR="${CLIP_DIR:-$COMFYUI_ROOT/models/text_encoders}"
+  VAE_DIR="${VAE_DIR:-$COMFYUI_ROOT/models/vae}"
+elif [ "${SERVERLESS,,}" = "true" ]; then
   COMFYUI_ROOT="${COMFYUI_PATH:-${WORKSPACE}/ComfyUI}"
   MODEL_DIR="${MODEL_DIR:-$COMFYUI_ROOT/models/diffusion_models}"
   CLIP_DIR="${CLIP_DIR:-$COMFYUI_ROOT/models/text_encoders}"
