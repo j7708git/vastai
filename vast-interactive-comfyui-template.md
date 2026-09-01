@@ -30,6 +30,9 @@ PROVISIONING_SCRIPT=https://raw.githubusercontent.com/j7708git/vastai/main/provi
 OPEN_BUTTON_PORT=8188
 ```
 
+`OPEN_BUTTON_PORT` 如果原本就已經存在（例如 `OPEN_BUTTON_PORT="1111"`），
+只要把值改成 `8188` 就好，不要新增第二行。
+
 確認 template 已開放對外 port `8188`；如果沒有，在 docker options 加入：
 
 ```text

@@ -16,6 +16,9 @@ CF_QUICK_TUNNELS=true
 OPEN_BUTTON_PORT=8188
 ```
 
+如果 template 原本已有 `OPEN_BUTTON_PORT`，直接把值改成 `8188` 就好，不要
+重複新增。
+
 互動式 image 會優先下載到 ai-dock 的 workspace storage：
 
 ```text
