@@ -74,7 +74,7 @@
   },
   "55": {
     "inputs": {
-      "unet_name": "lustifyNSFWCheckpoint_v10Krea2.safetensors",
+      "unet_name": "%model%",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",
@@ -95,7 +95,7 @@
   },
   "57": {
     "inputs": {
-      "vae_name": "qwen_image_vae.safetensors"
+      "vae_name": "%vae%"
     },
     "class_type": "VAELoader",
     "_meta": {

@@ -221,6 +221,25 @@ def download_bytes(url: str) -> bytes:
 
 def object_info_data() -> dict:
     return {
+        "CheckpointLoaderSimple": {
+            "input": {
+                "required": {
+                    "ckpt_name": [
+                        [
+                            "lustifyNSFWCheckpoint_v10Krea2.safetensors",
+                            "moodyKrea2Mix_v70.safetensors",
+                        ]
+                    ]
+                }
+            }
+        },
+        "UnetLoaderGGUF": {
+            "input": {
+                "required": {
+                    "unet_name": [[""]]
+                }
+            }
+        },
         "KSampler": {
             "input": {
                 "required": {
