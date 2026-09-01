@@ -75,8 +75,8 @@ New-NetFirewallRule -DisplayName "Vast ComfyUI Bridge 8765" -Direction Inbound -
 
 這條規則只允許同一個 Wi-Fi 子網路連入，不會開放公網。
 
-SillyTavern 的內建 ComfyUI source 不支援 Vast Serverless 的 `/generate/sync`
-與 worker route/auth，因此不要用內建 ComfyUI source；改用上面這個 bridge。
+SillyTavern 的內建 ComfyUI source 不能直接連 Vast Serverless，但 bridge 現在
+已加入 ComfyUI-compatible endpoints，可以讓內建 Image Generation 使用。
 
 目前 bridge 支援 `prompt`、`width`、`height`、`steps`、`seed`、CFG、
 sampler、scheduler 和最多 4 張批次。負面 prompt 尚未接到 workflow。
@@ -111,6 +111,32 @@ BRIDGE_TOKEN=你的本機bridge密碼
 
 然後在 QIG 的 API Key 欄位填入同一個 token。沒有設定 token 時，firewall
 仍應限制為 `LocalSubnet`。
+
+## SillyTavern 原生 Image Generation
+
+如果只用 SillyTavern 內建的 **Image Generation**，不需要 QIG。請在內建「圖片生成設定」填：
+
+```text
+Source        = ComfyUI
+Server Type   = Standard Server
+ComfyUI URL   = http://192.168.0.39:8765
+```
+
+URL 建議使用 bridge 根位址，也就是**不要加上 `/v1`**。bridge 也支援 `/v1`
+路徑，但原生 ComfyUI 的根位址比較直覺。
+
+Workflow 請在 `Image Generation -> ComfyUI Workflow` 中新增或替換成：
+
+```text
+sillytavern-krea2-workflow.json
+```
+
+這個 workflow 使用 `%prompt%`、`%seed%`、`%width%`、`%height%`、`%steps%`、
+`%scale%`、`%sampler%`、`%scheduler%` 和 `%denoise%` placeholders，輸出節點是
+原生的 `SaveImage`，沒有 `ImageCompressor` custom node。
+
+設定好 workflow 後，按 `Connect`；bridge 會回傳 `/system_stats`，產生時會把
+workflow 送到 Vast，再以 `/history` 和 `/view` 把圖片回給 SillyTavern。
 
 ## 重要安全提醒
 

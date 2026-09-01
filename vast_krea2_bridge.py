@@ -5,10 +5,12 @@ import copy
 import datetime as dt
 import json
 import os
+import random
 import sys
 import time
 import uuid
 from pathlib import Path
+import urllib.request
 
 import boto3
 from aiohttp import web
@@ -28,6 +30,9 @@ CORS_HEADERS = {
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
+
+_COMFY_JOBS: dict[str, dict] = {}
+_COMFY_IMAGES: dict[str, bytes] = {}
 
 
 def load_local_env(path: Path) -> None:
@@ -194,6 +199,156 @@ def response_payload(payload: dict) -> dict:
     }
 
 
+def extract_workflow(data: dict) -> dict:
+    workflow = data.get("prompt", data)
+    if isinstance(workflow, str):
+        workflow = json.loads(workflow)
+    if isinstance(workflow, dict) and "prompt" in workflow:
+        inner = workflow["prompt"]
+        if isinstance(inner, (str, dict)):
+            workflow = inner
+    if isinstance(workflow, str):
+        workflow = json.loads(workflow)
+    if not isinstance(workflow, dict):
+        raise ValueError("ComfyUI workflow must be a JSON object.")
+    return workflow
+
+
+def download_bytes(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=120) as response:
+        return response.read()
+
+
+def object_info_data() -> dict:
+    return {
+        "KSampler": {
+            "input": {
+                "required": {
+                    "sampler_name": [["euler", "dpmpp_2m", "dpmpp_sde"]],
+                    "scheduler": [["simple", "normal", "karras"]],
+                    "steps": [[8]],
+                    "cfg": [[1.0]],
+                    "denoise": [[1.0]],
+                }
+            }
+        },
+        "UNETLoader": {
+            "input": {
+                "required": {
+                    "unet_name": [
+                        [
+                            "lustifyNSFWCheckpoint_v10Krea2.safetensors",
+                            "moodyKrea2Mix_v70.safetensors",
+                        ]
+                    ]
+                }
+            }
+        },
+        "CLIPLoader": {
+            "input": {
+                "required": {
+                    "clip_name": [["qwen3vl_4b_fp8_scaled.safetensors"]]
+                }
+            }
+        },
+        "VAELoader": {
+            "input": {
+                "required": {
+                    "vae_name": [["qwen_image_vae.safetensors"]]
+                }
+            }
+        },
+        "SaveImage": {"input": {"required": {"filename_prefix": [["vast/krea2"]]}}},
+        "CLIPTextEncode": {
+            "input": {"required": {"text": [[], {"default": ""}], "clip": [["56", 0]]}}
+        },
+        "ConditioningZeroOut": {
+            "input": {"required": {"conditioning": [["51", 0]]}}
+        },
+        "PrimitiveStringMultiline": {
+            "input": {"required": {"value": [[], {"default": ""}]}}
+        },
+        "EmptyLatentImage": {
+            "input": {
+                "required": {
+                    "width": [[768]],
+                    "height": [[768]],
+                    "batch_size": [[1]],
+                }
+            }
+        },
+        "VAEDecode": {"input": {"required": {"samples": [["53", 0]], "vae": [["57", 0]]}}},
+        "ImageCompressor": {
+            "input": {
+                "required": {
+                    "images": [["54", 0]],
+                    "format": [["PNG"]],
+                }
+            }
+        },
+    }
+
+
+async def run_comfy_job(prompt_id: str, workflow: dict, app: web.Application):
+    job = _COMFY_JOBS[prompt_id]
+    try:
+        if "__RANDOM_INT__" in json.dumps(workflow):
+            workflow = replace_strings(
+                workflow,
+                "__RANDOM_INT__",
+                str(random.randint(0, 2**31 - 1)),
+            )
+        payload = {
+            "input": {
+                "request_id": prompt_id,
+                "workflow_json": workflow,
+            }
+        }
+        raw = await generate_with_vast(payload, app["endpoint_name"], app["api_key"])
+        raw = normalize_vast_output(
+            raw,
+            app["s3_profile"],
+            app["s3_bucket"],
+            app["s3_prefix"],
+            app["clean_s3"],
+        )
+        response = raw.get("response", raw)
+        output_map = {}
+        for item in response.get("output") or []:
+            filename = item.get("filename")
+            url = item.get("url")
+            if not filename or not url:
+                continue
+            data = await asyncio.to_thread(download_bytes, url)
+            _COMFY_IMAGES[filename] = data
+            node_id = str(item.get("node_id") or "78")
+            output_map.setdefault(node_id, {"images": []})["images"].append(
+                {
+                    "filename": filename,
+                    "subfolder": item.get("subfolder", ""),
+                    "type": item.get("output_type", "output"),
+                }
+            )
+        if not output_map:
+            raise ValueError("Vast completed without a ComfyUI image output.")
+        job["outputs"] = output_map
+        job["status"] = "success"
+    except Exception as exc:
+        job["status"] = "error"
+        job["messages"] = [
+            [
+                "execution_error",
+                {
+                    "node_type": "Bridge",
+                    "node_id": "0",
+                    "exception_message": str(exc),
+                },
+            ]
+        ]
+    finally:
+        job["completed"] = True
+
+
 def json_response(payload: dict, status: int = 200):
     return web.json_response(payload, status=status, headers=CORS_HEADERS)
 
@@ -285,6 +440,90 @@ async def handle_health(request: web.Request):
     )
 
 
+async def handle_comfy_prompt(request: web.Request):
+    try:
+        raw = await request.json()
+        workflow = extract_workflow(raw)
+    except Exception:
+        return json_response({"error": "Invalid ComfyUI workflow"}, status=400)
+
+    prompt_id = uuid.uuid4().hex
+    _COMFY_JOBS[prompt_id] = {
+        "id": prompt_id,
+        "workflow": workflow,
+        "status": "pending",
+        "completed": False,
+        "outputs": {},
+        "messages": [],
+    }
+    asyncio.create_task(run_comfy_job(prompt_id, workflow, request.app))
+    return json_response(
+        {
+            "prompt_id": prompt_id,
+            "number": 1,
+            "node_errors": {},
+        }
+    )
+
+
+def comfy_history_item(job: dict) -> dict:
+    return {
+        "prompt": job["workflow"],
+        "outputs": job["outputs"],
+        "status": {
+            "status_str": job["status"],
+            "completed": job["completed"],
+            "messages": job["messages"],
+        },
+    }
+
+
+async def handle_comfy_history(request: web.Request):
+    prompt_id = request.match_info.get("prompt_id")
+    history = {
+        job_id: comfy_history_item(job)
+        for job_id, job in _COMFY_JOBS.items()
+        if job["completed"]
+    }
+    if prompt_id:
+        return json_response(history.get(prompt_id, {}))
+    return json_response(history)
+
+
+async def handle_comfy_view(request: web.Request):
+    filename = request.query.get("filename", "")
+    image = _COMFY_IMAGES.get(filename)
+    if image is None:
+        return json_response({"error": "Image not found"}, status=404)
+    return web.Response(body=image, content_type="image/png", headers=CORS_HEADERS)
+
+
+async def handle_system_stats(request: web.Request):
+    return json_response(
+        {
+            "system": {
+                "comfyui_version": "vast-bridge",
+                "python_version": "3.13",
+            },
+            "devices": [],
+        }
+    )
+
+
+async def handle_object_info(request: web.Request):
+    data = object_info_data()
+    class_type = request.match_info.get("class_type")
+    if class_type:
+        if class_type not in data:
+            return json_response({})
+        return json_response({class_type: data[class_type]})
+    return json_response(data)
+
+
+async def handle_interrupt(request: web.Request):
+    return json_response({"ok": True})
+
+
 async def handle_options(request: web.Request):
     return web.Response(status=204, headers=CORS_HEADERS)
 
@@ -336,6 +575,22 @@ def main() -> int:
     app["clean_s3"] = not args.keep_s3
     app.router.add_post("/v1/images/generations", handle_generate)
     app.router.add_get("/health", handle_health)
+    app.router.add_get("/system_stats", handle_system_stats)
+    app.router.add_get("/object_info", handle_object_info)
+    app.router.add_get("/object_info/{class_type}", handle_object_info)
+    app.router.add_post("/prompt", handle_comfy_prompt)
+    app.router.add_get("/history", handle_comfy_history)
+    app.router.add_get("/history/{prompt_id}", handle_comfy_history)
+    app.router.add_get("/view", handle_comfy_view)
+    app.router.add_post("/interrupt", handle_interrupt)
+    app.router.add_get("/v1/system_stats", handle_system_stats)
+    app.router.add_get("/v1/object_info", handle_object_info)
+    app.router.add_get("/v1/object_info/{class_type}", handle_object_info)
+    app.router.add_post("/v1/prompt", handle_comfy_prompt)
+    app.router.add_get("/v1/history", handle_comfy_history)
+    app.router.add_get("/v1/history/{prompt_id}", handle_comfy_history)
+    app.router.add_get("/v1/view", handle_comfy_view)
+    app.router.add_post("/v1/interrupt", handle_interrupt)
     app.router.add_route("OPTIONS", "/{tail:.*}", handle_options)
 
     if args.prompt:

@@ -57,7 +57,9 @@ bridge。
 | SillyTavern bridge | 初版已完成 | `vast_krea2_bridge.py` 已建立 |
 | S3 輸出資料夾 | 已完成 | 正式圖片統一放在 `krea2/`，臨時 UUID 目錄會刪除 |
 | S3 benchmark 清理 | 已完成 | `test-*` 物件設定 1 天 lifecycle expiration |
-| SillyTavern 接線 | 未完成 | 尚未在 QIG / SillyTavern 實測 |
+| Native ComfyUI adapter | 已完成 | bridge 已模擬 ST 需要的 ComfyUI endpoints |
+| Native SillyTavern workflow | 已完成 | `sillytavern-krea2-workflow.json` 已準備 |
+| SillyTavern 接線 | 未完成 | 尚未在另一台電腦的 ST 實際送出圖片 |
 
 ## 3. AWS / S3 目前設定
 
@@ -381,7 +383,35 @@ Endpoint mode   = images_generations
 Payload mode    = extended
 ```
 
-### 8.3 安全與執行建議
+### 8.3 原生 SillyTavern Image Generation
+
+SillyTavern 內建 `Image Generation -> ComfyUI` 的設定：
+
+```text
+Source        = ComfyUI
+Server Type   = Standard Server
+ComfyUI URL   = http://192.168.0.39:8765
+```
+
+bridge 已加入原生 ComfyUI 需要的 endpoints：
+
+```text
+/system_stats
+/object_info
+/prompt
+/history
+/view
+```
+
+內建 ST 工作流請使用：
+
+```text
+sillytavern-krea2-workflow.json
+```
+
+它只有原生 `SaveImage`，不依賴 `ImageCompressor`。
+
+### 8.4 安全與執行建議
 
 - bridge 預設綁定 `0.0.0.0`，只開放 Windows firewall 的 `8765` port。
 - firewall 規則使用 `LocalSubnet`，讓同一個 Wi-Fi 子網路的電腦可以連線。
@@ -427,11 +457,11 @@ New-NetFirewallRule -DisplayName "Vast ComfyUI Bridge 8765" -Direction Inbound -
 ### 9.3 完成 SillyTavern 接線
 
 - [x] 確認 SillyTavern 使用的 image generation extension 或 QIG 的 API 格式。
-- [x] 確認 QIG 使用 OpenAI-compatible `/v1/images/generations`。
+- [x] 確認原生 Image Generation 使用 ComfyUI `/prompt`、`/history`、`/view`。
 - [x] 實作本地 bridge API。
 - [x] 在 bridge 中設定 Vast endpoint name。
-- [ ] 用 curl 或其他 client 測試 bridge。
-- [ ] 在 SillyTavern 設定 custom API / reverse proxy 指到 bridge。
+- [x] 用 curl / 本機 HTTP client 測試 bridge 的 ComfyUI-compatible 流程。
+- [ ] 在另一台 SillyTavern 設定 Source = ComfyUI、URL = bridge LAN IP。
 - [ ] 從 SillyTavern 送出一張圖，確認圖片 URL 可下載。
 
 ## 10. 已知尚未確認事項
@@ -442,10 +472,10 @@ New-NetFirewallRule -DisplayName "Vast ComfyUI Bridge 8765" -Direction Inbound -
 4. Krea 2 workflow 已在 Vast worker 上成功產生圖片。
 5. `ImageCompressor` custom node 尚未在 Vast worker 成功載入；目前 workflow
    已改用原生 `SaveImage`，壓縮節點可之後再修。
-6. SillyTavern / QIG 的實際 API 格式尚未確認。
+6. SillyTavern 原生 ComfyUI adapter 已測試，但尚未從另一台電腦的 ST UI 送出圖片。
 7. 是否使用 `lustifyNSFWCheckpoint_v10Krea2.safetensors` 或
    `moodyKrea2Mix_v70.safetensors` 尚未做最終選擇。
-8. Bridge 已建立，但尚未在 QIG / SillyTavern 中實際測試。
+8. Bridge 已在本地模擬原生 ComfyUI 流程測試，尚未在另一台電腦的 ST UI 實測。
 
 ## 11. 目前檔案清單
 
@@ -457,6 +487,7 @@ New-NetFirewallRule -DisplayName "Vast ComfyUI Bridge 8765" -Direction Inbound -
 | `vast_krea2_client.py` | 本機 Vast 測試 client | 初版完成 |
 | `vast_krea2_bridge.py` | SillyTavern OpenAI-compatible bridge | 初版完成 |
 | `s3_reorganize.py` | S3 圖片歸檔與臨時物件清理工具 | 初版完成 |
+| `sillytavern-krea2-workflow.json` | SillyTavern 原生 Image Generation workflow | 初版完成 |
 | `requirements.txt` | bridge 與 client 依賴 | 初版完成 |
 | `vast-provisioning.md` | Provisioning 設定摘要 | 完成 |
 | `vast-s3-setup.md` | S3 非機密設定摘要 | 完成 |
