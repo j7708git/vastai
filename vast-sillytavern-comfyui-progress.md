@@ -491,5 +491,9 @@ New-NetFirewallRule -DisplayName "Vast ComfyUI Bridge 8765" -Direction Inbound -
 | `vast-provisioning.md` | Provisioning 設定摘要 | 完成 |
 | `vast-s3-setup.md` | S3 非機密設定摘要 | 完成 |
 | `vast-comfyui-s3-policy.json` | S3 物件權限策略 | 完成 |
+| `rent_gpu.py` | 一鍵租機：篩選→租用→等開機→抓 tunnel URL | 完成 |
+| `find_gpu.py` | 市場掃描+篩選+排序（輕量版） | 完成 |
+| `check_gpus.py` | 指定機型合規檢查（分析用） | 完成 |
+| `analyze_full.py` | 全量市場分析（分析用） | 完成 |
 | `vast-comfyui-s3-credentials.env` | AWS 憑證，本機限定 | 已完成，不提交 |
 | `.gitignore` | 忽略憑證檔案 | 完成 |

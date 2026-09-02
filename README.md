@@ -36,6 +36,54 @@ SillyTavern 的 ComfyUI URL 填 Instance Portal 裡拿到的
 
 原本的 Serverless + 本地 bridge 方案仍保留在下方，作為備援。
 
+## 租機自動化（rent_gpu.py）
+
+`rent_gpu.py` 是「一鍵租機」腳本，把搜尋、篩選、租用、等待開機、模型下載、
+抓取 tunnel URL 全部自動化：
+
+```bash
+# 用 ComfyUI_codex 模板租最便宜的合格消費級 RTX
+python3 rent_gpu.py
+
+# 指定 GPU 型號（逗號分隔）
+python3 rent_gpu.py --gpu RTX_4080S,RTX_4090
+
+# 放寬流量費到 $2/TB
+python3 rent_gpu.py --max-cost 2
+
+# 接受伺服器卡（A10/A100/PRO 等，預設只選消費級 RTX）
+python3 rent_gpu.py --server-gpu
+
+# 只掃描不租（看市場現況）
+python3 rent_gpu.py --dry-run
+
+# 刪除實例（停止計費）
+python3 rent_gpu.py --destroy INSTANCE_ID
+```
+
+### 篩選條件（Jason 的五條標準）
+
+| 條件 | 參數/門檻 |
+| --- | --- |
+| VRAM ≥ 16G | `gpu_ram >= 16000` (MiB) |
+| 算力 TFLOPS > 25 | `total_flops >= 25` 或 `dlperf >= 25` |
+| 下載 ≥ 800 Mbps | `inet_down >= 800` |
+| 流量費 ≤ $1/TB | `inet_down_cost/up <= 0.001 $/GB`（可用 `--max-cost` 調整） |
+| PCIe 沒被閹割 | `pcie_bw >= 16 GB/s` |
+
+`find_gpu.py` 是只做「掃描+篩選+排序」的輕量版，適合快速查看市場：
+
+```bash
+python3 find_gpu.py                        # 預設條件
+python3 find_gpu.py --max-cost 2           # 放寬流量費
+python3 find_gpu.py --gpu RTX_4080S        # 指定型號
+```
+
+### 注意：CLI 分頁上限
+
+`vastai search offers` 預設只回傳前 64 筆（舊版 CLI），會漏掉 95% 市場！
+兩個腳本都已加 `--limit 2000` 抓全量。若自行使用 CLI 記得加這個參數。
+
 ## 目前功能
 
 - S3 已存放 Krea 2 UNet、text encoder 和 VAE。
@@ -47,6 +95,7 @@ SillyTavern 的 ComfyUI URL 填 Instance Portal 裡拿到的
   再透過 Vast `/generate/sync` 呼叫。
 - `vast_krea2_bridge.py` 可作為 Serverless 橋接，或作為真實 ComfyUI 的
   proxy 備援。
+- `rent_gpu.py` 一鍵租機（見上方說明）。
 
 目前 workflow 使用原生的 `SaveImage` 輸出，先確認 Krea 2 主流程可正常生成；
 `ImageCompressor` custom node 會由 provisioning script 嘗試安裝，但不阻擋測試。
