@@ -89,7 +89,7 @@ python3 find_gpu.py --gpu RTX_4080S        # 指定型號
 - S3 已存放 Krea 2 UNet、text encoder 和 VAE。
 - `provisioning.sh` 會在 Vast worker 啟動時下載模型，並安裝
   `ComfyUI-Image-Compressor` custom node。
-- LoRA 會下載到 `models/krea2/loras/`。
+- LoRA 會下載到 `models/loras/krea2/`（ComfyUI 選單顯示為 `krea2/...`）。
 - `vast-krea2-t2i.json` 是 Vast-ready 的 ComfyUI API-format workflow。
 - `vast_krea2_client.py` 是本機測試 client，會把 prompt 替換進 workflow，
   再透過 Vast `/generate/sync` 呼叫。

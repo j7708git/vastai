@@ -40,7 +40,7 @@ else
   fi
 fi
 
-LORA_DIR="${LORA_DIR:-$COMFYUI_ROOT/models/krea2/loras}"
+LORA_DIR="${LORA_DIR:-$COMFYUI_ROOT/models/loras/krea2}"
 
 VENV_PYTHON="${VENV_PYTHON:-}"
 if [ -z "$VENV_PYTHON" ] && [ -n "${COMFYUI_VENV_PYTHON:-}" ] && [ -x "$COMFYUI_VENV_PYTHON" ]; then

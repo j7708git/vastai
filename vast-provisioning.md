@@ -26,7 +26,7 @@ Vast 官方 ComfyUI base image 會下載到實際執行 ComfyUI 的資料夾：
 ${WORKSPACE}/ComfyUI/models/diffusion_models/
 ${WORKSPACE}/ComfyUI/models/text_encoders/
 ${WORKSPACE}/ComfyUI/models/vae/
-${WORKSPACE}/ComfyUI/models/krea2/loras/
+${WORKSPACE}/ComfyUI/models/loras/krea2/
 ${WORKSPACE}/ComfyUI/custom_nodes/comfyui-image-compressor/
 ```
 
