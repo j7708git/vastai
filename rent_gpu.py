@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -136,68 +137,129 @@ def wait_running(instance_id, timeout=600):
     return None
 
 
+def ssh_run(ssh_cmd, remote_cmd, timeout=40):
+    """SSH 執行遠端命令。用 shlex.quote 包住命令避免引號地雷；
+    失敗時回傳 (stdout, stderr)，永不拋例外。"""
+    full = f"{ssh_cmd} {shlex.quote(remote_cmd)}"
+    try:
+        r = subprocess.run(full, shell=True, capture_output=True,
+                           text=True, timeout=timeout)
+        return r.stdout or "", r.stderr or ""
+    except subprocess.TimeoutExpired:
+        return "", "(timeout)"
+    except Exception as e:
+        return "", str(e)
+
+
 def wait_models_ready(instance_id, info, timeout=900):
-    """SSH 進去等模型下載完成 + ComfyUI 就緒，回傳 (ssh_cmd, tunnel_url)"""
+    """SSH 進去等模型下載完成 + ComfyUI 就緒，回傳 (ssh_cmd, tunnel_url)
+
+    修復版（2026-09）：
+    - ssh_port 缺失時用 `vastai ssh-url` 解析，不再直接 return None
+    - SSH 加 BatchMode=yes，認證失敗立即報錯而非掛在密碼提示等到超時
+    - 模型就緒判據：models 樹下無 .part 殘留 + 至少一個 .safetensors
+      （不再寫死 diffusion_models/ 路徑，provisioning 的 MODEL_DIR 因鏡像而異）
+    - ComfyUI 就緒判據：本機 18188 /system_stats 回 ram_total（真正可用信號）
+    - tunnel 抓取改從本機 curl 探測，失敗時印出逃生指令
+    """
     ssh_host = info.get("ssh_host") or info.get("public_ipaddr")
     ssh_port = info.get("ssh_port")
     if not ssh_host or not ssh_port:
-        LOG("⚠️ 無法取得 SSH 資訊")
-        return None, None
+        # fallback: 從 ssh-url 解析 ssh://root@HOST:PORT
+        rc, out, err = run_vastai(["ssh-url", str(instance_id)], timeout=30)
+        m = re.search(r"ssh://root@([^:]+):(\d+)", out or "")
+        if not m:
+            LOG(f"⚠️ 無法取得 SSH 資訊 (ssh-url 也失敗: {err.strip()})")
+            return None, None
+        ssh_host, ssh_port = m.group(1), int(m.group(2))
+        LOG(f"  ssh-url 解析: root@{ssh_host}:{ssh_port}")
 
-    ssh_cmd = (f"ssh -o StrictHostKeyChecking=no -o ConnectTimeout=20 "
+    ssh_cmd = (f"ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 "
+               f"-o BatchMode=yes "
                f"-i {SSH_KEY} -p {ssh_port} root@{ssh_host}")
 
-    LOG(f"🔑 附加上本機 SSH key")
-    rc, out, err = run_vastai(["attach", "ssh", str(instance_id), f"{SSH_KEY}.pub"], timeout=60)
-    time.sleep(5)
+    LOG("🔑 附加上本機 SSH key")
+    run_vastai(["attach", "ssh", str(instance_id), f"{SSH_KEY}.pub"], timeout=60)
+    time.sleep(3)
 
-    LOG("⏳ 等模型從 S3 下載 + ComfyUI 啟動 (可達 10 分鐘)...")
+    LOG("⏳ 等模型從 S3 下載 + ComfyUI 啟動 + tunnel 就緒 (可達 15 分鐘)...")
     start = time.time()
+    ssh_ok = False
     model_ok = False
+    api_ok = False
     tunnel_url = None
 
+    # 單一狀態機循環：SSH / 模型 / API / tunnel 各自獨立檢查，
+    # 任何一項好了就標記，全部完成即提早跳出；總時間到就放棄。
     while time.time() - start < timeout:
-        # 1. 檢查模型是否下載完
-        check = (f"{ssh_cmd} 'find /workspace/ComfyUI/models -name \"*.part*\" 2>/dev/null | wc -l; "
-                 f"ls /workspace/ComfyUI/models/diffusion_models/*.safetensors 2>/dev/null | wc -l'")
-        try:
-            r = subprocess.run(check, shell=True, capture_output=True, text=True, timeout=60)
-            lines = [l.strip() for l in r.stdout.splitlines() if l.strip().isdigit()]
-            if len(lines) >= 2:
-                parts, models = int(lines[-2]), int(lines[-1])
-                if parts == 0 and models >= 1:
-                    model_ok = True
-                    LOG(f"✅ 模型下載完成 ({models} 個主模型)")
-                    break
-                LOG(f"  [{int(time.time()-start)}s] 下載中... (.part={parts}, models={models})")
-        except Exception:
-            pass
-        time.sleep(25)
+        t = int(time.time() - start)
+        if not ssh_ok:
+            out, err = ssh_run(ssh_cmd, "echo ssh_ok")
+            if "ssh_ok" in out:
+                ssh_ok = True
+                LOG(f"  [{t}s] ✅ SSH 就緒")
+            else:
+                LOG(f"  [{t}s] SSH 未就緒: {err.strip()[:80]}")
 
-    # 2. 抓 tunnel URL（comfyui 那條）
-    LOG("🔍 抓取 Cloudflare tunnel URL...")
-    for attempt in range(10):
-        try:
-            r = subprocess.run(
-                f"{ssh_cmd} 'grep -ohE \"https://[a-zA-Z0-9-]+\\.trycloudflare\\.com\" /var/log/portal/tunnel_manager.log 2>/dev/null | sort -u'",
-                shell=True, capture_output=True, text=True, timeout=60)
-            candidates = r.stdout.split()
+        if ssh_ok and not model_ok:
+            parts, _ = ssh_run(
+                ssh_cmd,
+                'find /workspace/ComfyUI/models -name "*.part*" 2>/dev/null | wc -l')
+            total, _ = ssh_run(
+                ssh_cmd,
+                'find /workspace/ComfyUI/models -name "*.safetensors" 2>/dev/null | wc -l')
+            try:
+                n_parts = int(parts.strip() or "0")
+                n_total = int(total.strip() or "0")
+            except ValueError:
+                n_parts, n_total = -1, -1
+            if n_parts == 0 and n_total >= 1:
+                model_ok = True
+                LOG(f"  [{t}s] ✅ 模型下載完成 ({n_total} 個 safetensors，無 .part)")
+            else:
+                LOG(f"  [{t}s] 下載中... .part={n_parts} safetensors={n_total}")
+
+        if ssh_ok and not api_ok:
+            stats, _ = ssh_run(
+                ssh_cmd,
+                'curl -s --max-time 10 http://127.0.0.1:18188/system_stats || true')
+            if "ram_total" in stats or "comfyui" in stats.lower():
+                api_ok = True
+                LOG(f"  [{t}s] ✅ ComfyUI API 就緒 (127.0.0.1:18188)")
+            else:
+                LOG(f"  [{t}s] ComfyUI 啟動中...")
+
+        if ssh_ok and not tunnel_url:
+            out, _ = ssh_run(
+                ssh_cmd,
+                'grep -ohE "https://[a-zA-Z0-9-]+\\.trycloudflare\\.com" '
+                '/var/log/portal/tunnel_manager.log 2>/dev/null | sort -u')
+            candidates = sorted(set(out.split()))
+            if candidates:
+                LOG(f"  [{t}s] tunnel 候選 {len(candidates)} 條，探測中...")
             for url in candidates:
-                # 測試哪個是 ComfyUI
                 try:
                     r2 = subprocess.run(
-                        f"curl -s --max-time 15 {url}/system_stats",
-                        shell=True, capture_output=True, text=True, timeout=30)
+                        f"curl -s --max-time 12 {url}/system_stats",
+                        shell=True, capture_output=True, text=True, timeout=25)
                     if "comfyui" in r2.stdout.lower() or "ram_total" in r2.stdout:
                         tunnel_url = url
+                        LOG(f"  [{t}s] ✅ ComfyUI tunnel: {url}")
                         break
                 except Exception:
                     continue
-            if tunnel_url:
-                break
-        except Exception:
-            pass
-        time.sleep(10)
+
+        if ssh_ok and model_ok and api_ok and tunnel_url:
+            break
+        time.sleep(15)
+
+    if not ssh_ok:
+        LOG("❌ SSH 一直連不上，無法檢查模型狀態")
+        return ssh_cmd, None
+    if not tunnel_url:
+        LOG("⚠️ 找不到 tunnel URL！手動查詢:")
+        LOG(f"    vastai ssh-url {instance_id}")
+        LOG(f"    ssh root@<HOST> -p <PORT> 'grep trycloudflare /var/log/portal/tunnel_manager.log'")
 
     return ssh_cmd, tunnel_url
 
